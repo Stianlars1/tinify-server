@@ -4,11 +4,8 @@ import dev.tinify.DOMAIN_FULL
 import dev.tinify.getDownloadsDirectory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.http.MediaType
-import org.springframework.http.MediaTypeFactory
 import org.springframework.stereotype.Service
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
@@ -17,17 +14,15 @@ import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import javax.imageio.ImageIO
-import javax.imageio.ImageReader
 
 @Service
 class FileStorageService(
     private val logger: Logger = LoggerFactory.getLogger(FileStorageService::class.java),
     private val tempDir: String = getDownloadsDirectory(),
     private val executorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor(),
-    private val domainUrl: String = DOMAIN_FULL
+    private val domainUrl: String = DOMAIN_FULL,
 
-) {
+    ) {
 
     fun storeImageAndScheduleDeletion(
         imageBytes: ByteArray,

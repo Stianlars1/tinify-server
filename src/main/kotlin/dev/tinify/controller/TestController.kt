@@ -12,6 +12,6 @@ import org.springframework.web.bind.annotation.RestController
 class TestController {
     @GetMapping
     fun test(): ResponseEntity<String> {
-        return  ResponseEntity.ok().body("Hello World")
+        return ResponseEntity.ok().body("Hello World")
     }
 }

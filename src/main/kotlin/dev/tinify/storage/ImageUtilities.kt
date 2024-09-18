@@ -22,7 +22,7 @@ class ImageUtilities {
                         reader = readers.next()
                         val formatName = reader?.formatName
                         // Map the format name to MediaType
-                        return when (formatName?.toLowerCase()) {
+                        return when (formatName?.lowercase()) {
                             "jpeg", "jpg" -> MediaType.IMAGE_JPEG
                             "png" -> MediaType.IMAGE_PNG
                             "gif" -> MediaType.IMAGE_GIF
@@ -81,10 +81,10 @@ class ImageUtilities {
 
             // Check for GIF signature
             if (headerBytes.size >= 6 &&
-                headerBytes[0] == 'G'.toByte() && headerBytes[1] == 'I'.toByte() &&
-                headerBytes[2] == 'F'.toByte() && headerBytes[3] == '8'.toByte() &&
-                (headerBytes[4] == '7'.toByte() || headerBytes[4] == '9'.toByte()) &&
-                headerBytes[5] == 'a'.toByte()
+                headerBytes[0] == 'G'.code.toByte() && headerBytes[1] == 'I'.code.toByte() &&
+                headerBytes[2] == 'F'.code.toByte() && headerBytes[3] == '8'.code.toByte() &&
+                (headerBytes[4] == '7'.code.toByte() || headerBytes[4] == '9'.code.toByte()) &&
+                headerBytes[5] == 'a'.code.toByte()
             ) {
                 return MediaType.IMAGE_GIF
             }

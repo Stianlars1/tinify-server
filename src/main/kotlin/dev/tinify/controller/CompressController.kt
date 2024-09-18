@@ -1,4 +1,3 @@
-
 package dev.tinify.controller
 
 import dev.tinify.CompressionType

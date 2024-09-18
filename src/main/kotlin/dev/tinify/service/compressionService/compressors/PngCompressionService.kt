@@ -56,7 +56,8 @@ class PngCompressionService {
         val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
 
         try {
-            val processBuilder = ProcessBuilder("optipng", "-o7", "-out", tempOutputFile.absolutePath, inputFile.absolutePath)
+            val processBuilder =
+                ProcessBuilder("optipng", "-o7", "-out", tempOutputFile.absolutePath, inputFile.absolutePath)
             logger.info("ProcessBuilder command: ${processBuilder.command()}")
 
             val process = processBuilder.start()

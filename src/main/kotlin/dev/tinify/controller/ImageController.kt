@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.io.File
 import java.nio.file.Files
-import java.nio.file.Paths
 
 
 @RestController
@@ -21,7 +20,7 @@ import java.nio.file.Paths
 class ImageController(
     private val fileStorageService: FileStorageService,
 
-) {
+    ) {
     private val logger = LoggerFactory.getLogger(ImageController::class.java)
 
     @GetMapping("/{filename:.+}")

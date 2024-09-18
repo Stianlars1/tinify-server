@@ -5,21 +5,16 @@ import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
-import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.util.MimeTypeUtils
 import org.springframework.web.bind.annotation.*
-import java.io.File
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 
 @RestController
 @RequestMapping("/api/download")
 @CrossOrigin("*")
 class DownloadController(
     private val fileStorageService: FileStorageService,
-    private val imageUtilities: ImageUtilities
+    private val imageUtilities: ImageUtilities,
 ) {
     private val logger = LoggerFactory.getLogger(DownloadController::class.java)
 
