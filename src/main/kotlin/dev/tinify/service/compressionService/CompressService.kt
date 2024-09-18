@@ -3,6 +3,7 @@ package dev.tinify.service
 import dev.tinify.CompressionType
 import dev.tinify.service.compressionService.compressors.JpegCompressionService
 import dev.tinify.service.compressionService.compressors.PngCompressionService
+import dev.tinify.service.compressionService.compressors.WebPCompressionService
 import dev.tinify.service.compressionService.createTempFileWithUniqueName
 import dev.tinify.storage.FileStorageService
 import org.slf4j.Logger
@@ -24,6 +25,7 @@ class CompressService(
     private val fileStorageService: FileStorageService,
     private val pngCompressionService: PngCompressionService, // Inject the new service
     private val jpegCompressionService: JpegCompressionService,
+    private val webpCompressionService: WebPCompressionService
 ) {
     private val logger: Logger = LoggerFactory.getLogger(CompressService::class.java)
 
@@ -76,6 +78,9 @@ class CompressService(
 
             "jpeg", "jpg" -> {
                 jpegCompressionService.compressJpegUsingJpegOptim(inputFile, compressionType)
+            }
+            "webp" -> {
+                webpCompressionService.compressWebPUsingCwebp(inputFile, compressionType)
             }
 
             else -> throw IllegalArgumentException("Unsupported image format: $format")
