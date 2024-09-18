@@ -1,7 +1,7 @@
 package dev.tinify
 
-import org.springframework.http.HttpHeaders
 import java.awt.image.BufferedImage
+
 val DOWNLOADS_FOLDER = "downloads"
 
 enum class CompressionType {
@@ -18,7 +18,7 @@ enum class Services {
 data class ImageProcessingResult(
     val imageBytes: ByteArray,
     val format: String,
-    val uniqueFileName: String = ""
+    val uniqueFileName: String = "",
 )
 
 
@@ -72,3 +72,5 @@ fun writeImage(image: BufferedImage, format: String, outputStream: java.io.ByteA
 }
 
 val DOMAIN_FULL = "https://tinify.dev"
+
+
