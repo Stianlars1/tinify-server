@@ -74,3 +74,11 @@ fun writeImage(image: BufferedImage, format: String, outputStream: java.io.ByteA
 val DOMAIN_FULL = "https://tinify.dev"
 
 
+class ImageResponse {
+    var imageBytes: ByteArray? = null
+    var contentType: String? = null
+    var contentLength: Long = 0
+    var uniqueFileName: String? = null
+    var status: Int = 0
+    var errorMessage: String? = null
+}

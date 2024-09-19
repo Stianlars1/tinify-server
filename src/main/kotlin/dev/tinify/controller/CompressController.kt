@@ -2,6 +2,7 @@ package dev.tinify.controller
 
 import dev.tinify.CompressionType
 import dev.tinify.Services
+import dev.tinify.responses.ImageResponse
 import dev.tinify.service.CompressService
 import dev.tinify.service.ImageService
 import dev.tinify.service.UsageTrackerService
@@ -29,7 +30,7 @@ internal class CompressController(
     fun compress(
         @RequestParam("file") file: MultipartFile,
         @RequestParam("compressionType", defaultValue = "LOSSLESS") compressionType: CompressionType,
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<ImageResponse> {
         logger.debug("\n\n== POST == ")
         logger.debug("Incoming POST request on /api/compress")
         logger.debug("Compression type: {}", compressionType)
@@ -54,17 +55,19 @@ internal class CompressController(
             usageTrackerService.incrementServiceCount(Services.COMPRESS)
 
             // Prepare the response
-            val responseBody = mapOf(
-                "url" to downloadUrl,
-                "originalFilename" to imageRequestData.originalName,
-                "compressedSize" to compressionResult.compressedSize.toString(),
-                "compressionPercentage" to compressionResult.compressionPercentage.toString()
+            val responseBody = ImageResponse(
+                url = downloadUrl,
+                originalFilename = imageRequestData.originalName,
+                originalFileSize = imageRequestData.originalFileSize.toString(),
+                originalFormat = imageRequestData.originalFormat,
+                compressedSize = compressionResult.compressedSize.toString(),
+                compressionPercentage = compressionResult.compressionPercentage.toString()
             )
 
             return ResponseEntity.ok(responseBody)
         } catch (e: Exception) {
             logger.error("Error compressing image: ${e.message}", e)
-            return ResponseEntity.status(500).body(mapOf("error" to "Error compressing image: ${e.message}"))
+            return ResponseEntity.status(500).body(ImageResponse(isError = true, error = "Error compressing image: ${e.message}"))
         }
     }
 
