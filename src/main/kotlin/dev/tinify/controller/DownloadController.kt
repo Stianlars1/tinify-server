@@ -7,6 +7,8 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.io.File
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 @RestController
@@ -24,14 +26,18 @@ class DownloadController(
         @RequestParam(required = false) inline: Boolean?,
     ): ResponseEntity<ByteArray> {
         logger.debug("\n\n== GET == ")
-        logger.debug("Incoming GET request on /api/download/$incomingFileName \nwith inline option $inline")
-
+        logger.debug(
+            "Incoming GET request on /api/download/$incomingFileName \nwith inline option $inline"
+        )
 
         try {
+            // 0 decode incoming image
+            val decodedFileName =
+                URLDecoder.decode(incomingFileName, StandardCharsets.UTF_8.toString())
+            logger.debug("Decoded filename: $decodedFileName")
             // 1. Strip off any query parameters
-            val filename = incomingFileName.split("?")[0]
+            val filename = decodedFileName.split("?")[0]
             logger.debug("Filename without query params: $filename")
-
 
             // Step 1: Sanitize and validate the filename
             val sanitizedFilename = fileStorageService.sanitizeFilename(filename)
@@ -61,7 +67,6 @@ class DownloadController(
             val mediaType = imageUtilities.determineMediaType(fileBytes, sanitizedFilename)
             logger.debug("Determined media type: {}", mediaType)
 
-
             // 7. Extract the original filename
             val originalFilename = fileStorageService.extractOriginalFilename(sanitizedFilename)
             logger.debug("Original filename: $originalFilename")
@@ -70,18 +75,21 @@ class DownloadController(
             val headers = HttpHeaders()
             headers.contentType = mediaType
             if (inline == true) {
-                headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"$originalFilename\"")
+                headers.set(
+                    HttpHeaders.CONTENT_DISPOSITION,
+                    "inline; filename=\"$originalFilename\"",
+                )
             } else {
-                headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$originalFilename\"")
+                headers.set(
+                    HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"$originalFilename\"",
+                )
             }
             // 9. Return the response with the image bytes and headers
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(fileBytes)
+            return ResponseEntity.ok().headers(headers).body(fileBytes)
         } catch (e: Exception) {
             logger.error("Error downloading file: ${e.message}", e)
             return ResponseEntity.status(500).body("Error downloading file".toByteArray())
         }
     }
-
 }

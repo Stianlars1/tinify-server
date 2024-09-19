@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import java.io.File
 
 @RestController
 @RequestMapping("/api/crop")
@@ -40,58 +41,64 @@ class CropController(
         logger.debug("\n\n== CROP == ")
         logger.debug("Incoming POST request on /api/crop")
         logger.debug("x: $x, y: $y, width: $width, height: $height")
+        var tempFile: File? = null // Declare tempFile outside of try block to reference in finally
         try {
             // Get the image from the request
-            val imageRequestData = imageService.getImageFromRequest(file)
-            logger.debug("Image data: {}", imageRequestData)
-            if (imageRequestData.imageFile == null) {
-                logger.error("BufferedImage is null for GIF image")
-                return ResponseEntity.badRequest()
-                    .body(ImageResponse(isError = true, error = "We do not support cropping GIF images"))
-            }
+            val imageRequestData = imageService.getImageInfoFromRequest(file)
+
+            // create temp file
+            // Convert MultipartFile to a temporary File
+            tempFile = File.createTempFile("upload-crop-", ".${imageRequestData.originalFormat}")
+            file.transferTo(tempFile!!) // Save the uploaded image as a file
 
             // Perform cropping
-            val cropResult = cropService.cropImage(
-                imageRequestData, x = x, y = y, width = width, height = height
-            )
+            val cropResult =
+                cropService.cropImage(tempFile, x = x, y = y, width = width, height = height)
 
             // Store the compressed image
-            val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-                cropResult.imageBytes, imageRequestData.originalName, imageRequestData.originalFormat
-            )
+            val uniqueFileName =
+                fileStorageService.storeImageAndScheduleDeletion(
+                    cropResult,
+                    imageRequestData.originalName,
+                    imageRequestData.originalFormat,
+                )
 
             // Generate the download URL
             val downloadUrl = fileStorageService.createDownloadLink(uniqueFileName)
 
-
             // Log the usage
             usageTrackerService.incrementServiceCount(Services.CROP)
 
-
             val compressPercent =
-                getCompressionPercent(imageRequestData.originalFileSize, cropResult.imageBytes.size.toLong())
+                getCompressionPercent(imageRequestData.originalFileSize, cropResult.size.toLong())
 
             // Prepare the response
-            val responseBody = ImageResponse(
-                url = downloadUrl,
-                originalFilename = imageRequestData.originalName,
-                originalFileSize = imageRequestData.originalFileSize.toString(),
-                originalFormat = imageRequestData.originalFormat,
-                compressedSize = cropResult.imageBytes.size.toString(),
-                compressionPercentage = compressPercent.toString()
-            )
+            val responseBody =
+                ImageResponse(
+                    url = downloadUrl,
+                    originalFilename = imageRequestData.originalName,
+                    originalFileSize = imageRequestData.originalFileSize.toString(),
+                    originalFormat = imageRequestData.originalFormat,
+                    compressedSize = cropResult.size.toString(),
+                    compressionPercentage = compressPercent.toString(),
+                )
             // Prepare the headers
-            val headers = createCustomHeaders(
-                originalFilename = imageRequestData.originalName,
-                originalFileSize = imageRequestData.originalFileSize.toString(),
-                originalFormat = imageRequestData.originalFormat,
-                compressedSize = cropResult.imageBytes.size.toString(),
-                compressionPercentage = compressPercent.toString(),
-                uniqueFilename = cropResult.uniqueFileName,
-                customContentType = imageUtilities.determineMediaType(cropResult.imageBytes,imageRequestData.originalName),
-                contentType = MediaType.APPLICATION_JSON,
-                inline = false,
-            )
+            val headers =
+                createCustomHeaders(
+                    originalFilename = imageRequestData.originalName,
+                    originalFileSize = imageRequestData.originalFileSize.toString(),
+                    originalFormat = imageRequestData.originalFormat,
+                    compressedSize = cropResult.size.toString(),
+                    compressionPercentage = compressPercent.toString(),
+                    uniqueFilename = uniqueFileName,
+                    customContentType =
+                        imageUtilities.determineMediaType(
+                            cropResult,
+                            imageRequestData.originalName,
+                        ),
+                    contentType = MediaType.APPLICATION_JSON,
+                    inline = false,
+                )
 
             return ResponseEntity.ok().headers(headers).body(responseBody)
         } catch (e: Exception) {

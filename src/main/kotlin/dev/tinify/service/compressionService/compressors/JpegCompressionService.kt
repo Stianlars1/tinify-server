@@ -18,21 +18,22 @@ class JpegCompressionService {
 
         try {
             // Command options for jpegoptim based on compression type
-            val command = when (compressionType) {
-                CompressionType.LOSSY -> {
-                    listOf(
-                        "jpegoptim",
-                        "--max=70",
-                        "--strip-all",
-                        "--overwrite",
-                        inputFile.absolutePath
-                    )
-                }
+            val command =
+                when (compressionType) {
+                    CompressionType.LOSSY -> {
+                        listOf(
+                            "jpegoptim",
+                            "--max=70",
+                            "--strip-all",
+                            "--overwrite",
+                            inputFile.absolutePath,
+                        )
+                    }
 
-                CompressionType.LOSSLESS -> {
-                    listOf("jpegoptim", "--overwrite", inputFile.absolutePath)
+                    CompressionType.LOSSLESS -> {
+                        listOf("jpegoptim", "--overwrite", inputFile.absolutePath)
+                    }
                 }
-            }
 
             logger.info("ProcessBuilder command: $command")
 
@@ -59,6 +60,4 @@ class JpegCompressionService {
             throw RuntimeException("Error during JPEG compression: ${e.message}", e)
         }
     }
-
-
 }

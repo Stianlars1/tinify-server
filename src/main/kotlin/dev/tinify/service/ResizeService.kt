@@ -1,76 +1,67 @@
 package dev.tinify.service
 
-import dev.tinify.ImageProcessingResult
 import dev.tinify.storage.FileStorageService
-import dev.tinify.writeImageWithFallback
+import java.io.File
+import java.nio.file.Files
+import java.util.*
 import org.springframework.stereotype.Service
-import java.awt.Graphics2D
-import java.awt.RenderingHints
-import java.awt.image.BufferedImage
 
 @Service
 class ResizeService(private val fileStorageService: FileStorageService) {
 
     fun resizeImage(
-        imageFile: BufferedImage,
+        imageFile: File, // Instead of BufferedImage, we pass the image as a File for ImageMagick
+        // processing
         originalFileName: String,
         format: String,
         width: Int?,
         height: Int?,
         scale: Double?,
         keepAspectRatio: Boolean,
-    ): ImageProcessingResult {
-        // Determine new dimensions
-        val originalWidth = imageFile.width
-        val originalHeight = imageFile.height
-        var newWidth = width
-        var newHeight = height
+    ): ByteArray {
 
+        val outputFile = File.createTempFile("resized-${UUID.randomUUID()}", ".$format")
+
+        // Prepare ImageMagick command
+        val command = mutableListOf("convert", imageFile.absolutePath)
+
+        // Add resize options
         if (scale != null) {
-            // Resize based on scale factor
-            newWidth = (originalWidth * scale).toInt()
-            newHeight = (originalHeight * scale).toInt()
+            // If scale is provided, calculate scaling factor
+            command.add("-resize")
+            command.add("${(scale * 100).toInt()}%") // Converts scale to percentage for ImageMagick
         } else {
-            // Resize based on width and/or height
-            if (keepAspectRatio) {
-                if (newWidth == null && newHeight != null) {
-                    // Calculate width to maintain aspect ratio
-                    newWidth = (newHeight * originalWidth) / originalHeight
-                } else if (newHeight == null && newWidth != null) {
-                    // Calculate height to maintain aspect ratio
-                    newHeight = (newWidth * originalHeight) / originalWidth
-                } else if (newWidth == null && newHeight == null) {
-                    // If both are null, use original dimensions
-                    newWidth = originalWidth
-                    newHeight = originalHeight
-                }
-            } else {
-                // If aspect ratio is not to be maintained, default missing dimensions to original
-                if (newWidth == null) newWidth = originalWidth
-                if (newHeight == null) newHeight = originalHeight
+            // If width/height is provided, adjust the size
+            if (width != null || height != null) {
+                val size =
+                    if (keepAspectRatio) {
+                        "${width ?: ""}x${height ?: ""}" // Respects aspect ratio
+                    } else {
+                        "${width ?: ""}x${height ?: ""}!" // Ignore aspect ratio with "!"
+                    }
+                command.add("-resize")
+                command.add(size)
             }
         }
 
-        // Perform the actual resizing
-        val resizedImage = BufferedImage(newWidth!!, newHeight!!, imageFile.type)
-        val graphics2D: Graphics2D = resizedImage.createGraphics()
-        graphics2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-        graphics2D.drawImage(imageFile, 0, 0, newWidth, newHeight, null)
-        graphics2D.dispose()
+        // Output the resized image
+        command.add(outputFile.absolutePath)
 
-        // Handle format-specific writing
-        val result = writeImageWithFallback(resizedImage, format)
+        // Execute ImageMagick command
+        val process = ProcessBuilder(command).start()
+        process.waitFor()
 
+        if (process.exitValue() != 0) {
+            throw RuntimeException(
+                "ImageMagick resizing failed: ${
+                    process.errorStream.bufferedReader().readText()
+                }"
+            )
+        }
 
-        // Store the image and get unique filename
-        val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-            result.imageBytes,
-            originalFileName,
-            result.format
-        )
+        // Read the resized image as bytes
+        val resizedImageBytes = Files.readAllBytes(outputFile.toPath())
 
-        return result.copy(uniqueFileName = uniqueFileName)
-
+        return resizedImageBytes
     }
-
 }

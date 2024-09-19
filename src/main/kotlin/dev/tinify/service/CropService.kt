@@ -1,47 +1,71 @@
 package dev.tinify.service
 
-import dev.tinify.ImageProcessingResult
 import dev.tinify.storage.FileStorageService
-import dev.tinify.writeImageWithFallback
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.io.File
+import java.nio.file.Files
 
 @Service
 class CropService(private val fileStorageService: FileStorageService) {
     private val logger = LoggerFactory.getLogger(CropService::class.java)
+
     fun cropImage(
-        imageRequestData: ImageRequestData,
+        imageFile: File, // Pass the file directly
         x: Int,
         y: Int,
         width: Int,
         height: Int,
-    ): ImageProcessingResult {
-        logger.debug("\n\n== service ==")
-        logger.debug("= cropImage =")
-        // Validate the cropping rectangle
-        if (x < 0 || y < 0 || width <= 0 || height <= 0 ||
-            x + width > imageRequestData.imageFile!!.width || y + height > imageRequestData.imageFile.height
-        ) {
-            logger.error("Invalid cropping rectangle.")
-            throw IllegalArgumentException("Invalid cropping rectangle.")
+    ): ByteArray {
+
+        try {
+            logger.debug("Cropping image with x: $x, y: $y, width: $width, height: $height")
+
+            // Create a temporary file for the output
+            val outputFile = File.createTempFile("cropped-", ".${getFileExtension(imageFile)}")
+
+            // Prepare the ImageMagick command to crop the image
+            val command =
+                listOf(
+                    "convert",
+                    imageFile.absolutePath,
+                    "-crop",
+                    "${width}x${height}+$x+$y", // Define the cropping rectangle
+                    outputFile.absolutePath,
+                )
+            logger.debug("ImageMagick CROP command: $command")
+
+            // Execute the ImageMagick command
+            val process = ProcessBuilder(command).start()
+            process.waitFor()
+
+            if (process.exitValue() != 0) {
+                logger.error(
+                    "ImageMagick cropping failed: ${process.errorStream.bufferedReader().readText()}"
+                )
+                throw RuntimeException(
+                    "ImageMagick cropping failed: ${
+                        process.errorStream.bufferedReader().readText()
+                    }"
+                )
+            }
+
+            // Read the cropped image as bytes
+            val croppedImageBytes = Files.readAllBytes(outputFile.toPath())
+            logger.debug("Cropped image size: ${croppedImageBytes.size} bytes")
+            return croppedImageBytes
+        } catch (e: Exception) {
+            logger.error("Error cropping image: ${e.message}")
+            throw e
         }
-
-        // Perform the cropping operation
-        val croppedImage = imageRequestData.imageFile.getSubimage(x, y, width, height)
-        // Handle format-specific writing
-        val result = writeImageWithFallback(croppedImage, imageRequestData.originalFormat)
-
-        // Store the image and get unique filename
-        val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-            result.imageBytes,
-            imageRequestData.originalName,
-            result.format
-        )
-        logger.debug("Unique filename: $uniqueFileName")
-        // Use writeImageWithFallback to handle potential format issues
-
-        // Return result with unique filename
-        return result.copy(uniqueFileName = uniqueFileName)
     }
 
+    // Utility function to get the file extension
+    fun getFileExtension(file: File): String {
+        logger.debug("Getting file extension for: ${file.name}")
+        val fileName =
+            file.extension.ifEmpty { file.name } // Use the file name if extension is missing
+        logger.debug("File name: $fileName")
+        return fileName
+    }
 }

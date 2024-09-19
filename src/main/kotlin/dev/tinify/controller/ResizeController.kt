@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import java.io.File
 
 @RestController
 @RequestMapping("/api/resize")
@@ -39,82 +40,105 @@ class ResizeController(
     ): ResponseEntity<ImageResponse> {
         logger.debug("\n\n== RESIZE == ")
         logger.debug("Incoming POST request on /api/resize")
-        logger.debug("width: $width, height: $height, scale: $scale, keepAspectRatio: $keepAspectRatio")
+        logger.debug(
+            "width: $width, height: $height, scale: $scale, keepAspectRatio: $keepAspectRatio"
+        )
+        var tempFile: File? = null // Declare tempFile outside of try block to reference in finally
+
         try {
 
             // Validate input parameters
             if (scale == null && width == null && height == null) {
                 logger.error("You must specify scale, width, or height.")
                 return ResponseEntity.badRequest()
-                    .body(ImageResponse(isError = true, error = "You must specify scale, width, or height."))
+                    .body(
+                        ImageResponse(
+                            isError = true,
+                            error = "You must specify scale, width, or height.",
+                        )
+                    )
             }
 
             // Get the image from the request
-            val imageRequestData = imageService.getImageFromRequest(file)
+            val imageRequestData = imageService.getImageInfoFromRequest(file)
             logger.debug("imageRequestData - originalName: ${imageRequestData.originalName}")
             logger.debug("imageRequestData - originalFormat: ${imageRequestData.originalFormat}")
-            logger.debug("imageRequestData - originalFileSize: ${imageRequestData.originalFileSize}")
-
-            if (imageRequestData.imageFile == null) {
-                logger.error("BufferedImage is null for GIF images")
-                return ResponseEntity.badRequest()
-                    .body(ImageResponse(isError = true, error = "We do not support resizing GIF images"))
-
-            }
-            // Perform resizing
-            val resizeResult = resizeService.resizeImage(
-                imageFile = imageRequestData.imageFile,
-                originalFileName = imageRequestData.originalName,
-                format = imageRequestData.originalFormat,
-                width = width,
-                height = height,
-                scale = scale,
-                keepAspectRatio = keepAspectRatio
+            logger.debug(
+                "imageRequestData - originalFileSize: ${imageRequestData.originalFileSize}"
             )
+
+            // Convert MultipartFile to a temporary File
+            tempFile = File.createTempFile("upload-", ".${imageRequestData.originalFormat}")
+            file.transferTo(tempFile!!) // Save the uploaded image as a file
+
+            // Perform resizing
+            val resizeByteArrayResult =
+                resizeService.resizeImage(
+                    imageFile = tempFile, // Use the temporary file
+                    originalFileName = imageRequestData.originalName,
+                    format = imageRequestData.originalFormat,
+                    width = width,
+                    height = height,
+                    scale = scale,
+                    keepAspectRatio = keepAspectRatio,
+                )
 
             // Store the compressed image
-            val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-                resizeResult.imageBytes, imageRequestData.originalName, imageRequestData.originalFormat
-            )
+            val uniqueFileName =
+                fileStorageService.storeImageAndScheduleDeletion(
+                    resizeByteArrayResult,
+                    imageRequestData.originalName,
+                    imageRequestData.originalFormat,
+                )
 
             // Generate the download URL
             val downloadUrl = fileStorageService.createDownloadLink(uniqueFileName)
-
 
             // Log the count for the usage tracking
             usageTrackerService.incrementServiceCount(Services.RESIZE)
 
             val compressPercent =
-                getCompressionPercent(imageRequestData.originalFileSize, resizeResult.imageBytes.size.toLong())
-
+                getCompressionPercent(
+                    imageRequestData.originalFileSize,
+                    resizeByteArrayResult.size.toLong(),
+                )
 
             // Prepare the response
-            val responseBody = ImageResponse(
-                url = downloadUrl,
-                originalFilename = imageRequestData.originalName,
-                originalFileSize = imageRequestData.originalFileSize.toString(),
-                originalFormat = imageRequestData.originalFormat,
-                compressedSize = resizeResult.imageBytes.size.toString(),
-                compressionPercentage = compressPercent.toString()
-            )
+            val responseBody =
+                ImageResponse(
+                    url = downloadUrl,
+                    originalFilename = imageRequestData.originalName,
+                    originalFileSize = imageRequestData.originalFileSize.toString(),
+                    originalFormat = imageRequestData.originalFormat,
+                    compressedSize = resizeByteArrayResult.toString(),
+                    compressionPercentage = compressPercent.toString(),
+                )
 
-            val headers = createCustomHeaders(
-                originalFilename = imageRequestData.originalName,
-                originalFileSize = imageRequestData.originalFileSize.toString(),
-                originalFormat = imageRequestData.originalFormat,
-                compressedSize = resizeResult.imageBytes.size.toString(),
-                compressionPercentage = compressPercent.toString(),
-                uniqueFilename = resizeResult.uniqueFileName,
-                customContentType = imageUtilities.determineMediaType(resizeResult.imageBytes, imageRequestData.originalName),
-                contentType = MediaType.APPLICATION_JSON,
-                inline = false,
-            )
+            val headers =
+                createCustomHeaders(
+                    originalFilename = imageRequestData.originalName,
+                    originalFileSize = imageRequestData.originalFileSize.toString(),
+                    originalFormat = imageRequestData.originalFormat,
+                    compressedSize = resizeByteArrayResult.size.toString(),
+                    compressionPercentage = compressPercent.toString(),
+                    uniqueFilename = uniqueFileName,
+                    customContentType =
+                        imageUtilities.determineMediaType(
+                            resizeByteArrayResult,
+                            imageRequestData.originalName,
+                        ),
+                    contentType = MediaType.APPLICATION_JSON,
+                    inline = false,
+                )
+
             return ResponseEntity.ok().headers(headers).body(responseBody)
-
         } catch (e: Exception) {
             // Handle exceptions
+            logger.error("Error resizing image: ${e.message}")
             return ResponseEntity.status(500)
                 .body(ImageResponse(isError = true, error = "Error resizing image: ${e.message}"))
+        } finally {
+            tempFile?.delete()
         }
     }
 }

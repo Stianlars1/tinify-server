@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
@@ -19,10 +21,10 @@ import java.util.concurrent.TimeUnit
 class FileStorageService(
     private val logger: Logger = LoggerFactory.getLogger(FileStorageService::class.java),
     private val tempDir: String = getDownloadsDirectory(),
-    private val executorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor(),
+    private val executorService: ScheduledExecutorService =
+        Executors.newSingleThreadScheduledExecutor(),
     private val domainUrl: String = DOMAIN_FULL,
-
-    ) {
+) {
 
     fun storeImageAndScheduleDeletion(
         imageBytes: ByteArray,
@@ -78,13 +80,10 @@ class FileStorageService(
         return Paths.get(filename).fileName.toString()
     }
 
-
     fun saveTempImage(imageBytes: ByteArray, uniqueFileName: String, format: String): String {
         val tempImagePath = Paths.get(tempDir, uniqueFileName).toString()
         try {
-            FileOutputStream(tempImagePath).use { fos ->
-                fos.write(imageBytes)
-            }
+            FileOutputStream(tempImagePath).use { fos -> fos.write(imageBytes) }
             logger.info("Image saved at: $tempImagePath")
             val originalFileName = extractOriginalFilename(uniqueFileName)
             logger.info("Original file name: $originalFileName")
@@ -95,19 +94,22 @@ class FileStorageService(
         return tempImagePath
     }
 
-
     fun scheduleFileDeletion(filePath: String) {
-        executorService.schedule({
-            val file = File(filePath)
-            if (file.exists()) {
-                val deleted = file.delete()
-                if (deleted) {
-                    logger.info("Temporary file deleted: $filePath")
-                } else {
-                    logger.error("Failed to delete temporary file: $filePath")
+        executorService.schedule(
+            {
+                val file = File(filePath)
+                if (file.exists()) {
+                    val deleted = file.delete()
+                    if (deleted) {
+                        logger.info("Temporary file deleted: $filePath")
+                    } else {
+                        logger.error("Failed to delete temporary file: $filePath")
+                    }
                 }
-            }
-        }, 24, TimeUnit.HOURS)
+            },
+            24,
+            TimeUnit.HOURS,
+        )
     }
 
     fun loadImage(uniqueFileName: String): Pair<ByteArray?, String?> {
@@ -144,9 +146,10 @@ class FileStorageService(
         return Paths.get(tempDir, uniqueFileName).toString()
     }
 
-
     fun createDownloadLink(uniqueFileNameWithExtension: String): String {
-        return "$domainUrl/api/download/$uniqueFileNameWithExtension"
+        // URL encode the filename to handle spaces and special characters
+        val encodedFileName =
+            URLEncoder.encode(uniqueFileNameWithExtension, StandardCharsets.UTF_8.toString())
+        return "$domainUrl/api/download/$encodedFileName"
     }
-
 }

@@ -14,23 +14,35 @@ class ImageMagickFallbackService {
 
     private val logger: Logger = LoggerFactory.getLogger(ImageMagickFallbackService::class.java)
 
-    fun convertAndCompressUsingImageMagick(inputFile: File, compressionType: CompressionType): ByteArray {
+    fun convertAndCompressUsingImageMagick(
+        inputFile: File,
+        compressionType: CompressionType,
+    ): ByteArray {
         logger.info("Attempting to convert and compress unsupported format using ImageMagick")
 
-        val tempOutputFile = File.createTempFile("converted-${UUID.randomUUID()}", ".jpg") // Using JPEG as fallback format
+        val tempOutputFile =
+            File.createTempFile(
+                "converted-${UUID.randomUUID()}",
+                ".jpg",
+            ) // Using JPEG as fallback format
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
             // Use ImageMagick to convert the image to a better supported format like JPEG or PNG
-            val command = listOf(
-                "convert",
-                inputFile.absolutePath,
-                "-strip",
-                "-type", "Palette", // Strip metadata and convert to palette type
-                "-compress", "JPEG",
-                "-quality", if (compressionType == CompressionType.LOSSLESS) "80" else "70", // Lossless or lossy based on input
-                tempOutputFile.absolutePath
-            )
+            val command =
+                listOf(
+                    "convert",
+                    inputFile.absolutePath,
+                    "-strip",
+                    "-type",
+                    "Palette", // Strip metadata and convert to palette type
+                    "-compress",
+                    "JPEG",
+                    "-quality",
+                    if (compressionType == CompressionType.LOSSLESS) "80"
+                    else "70", // Lossless or lossy based on input
+                    tempOutputFile.absolutePath,
+                )
 
             logger.info("ProcessBuilder command: $command")
 

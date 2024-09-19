@@ -19,7 +19,8 @@ class SvgOptimizeService {
             Files.write(tempInputFile.toPath(), svgBytes)
 
             val svgoPath = "/opt/bitnami/node/bin/svgo"
-            val command = listOf(svgoPath, tempInputFile.absolutePath, "-o", tempOutputFile.absolutePath)
+            val command =
+                listOf(svgoPath, tempInputFile.absolutePath, "-o", tempOutputFile.absolutePath)
             val processBuilder = ProcessBuilder(command)
 
             // Add the path to `node` to the environment
@@ -34,7 +35,9 @@ class SvgOptimizeService {
 
             // Check if the process was successful
             if (process.exitValue() != 0) {
-                throw RuntimeException("SVGO compression failed: ${process.errorStream.bufferedReader().readText()}")
+                throw RuntimeException(
+                    "SVGO compression failed: ${process.errorStream.bufferedReader().readText()}"
+                )
             }
 
             // Read and return the compressed SVG bytes

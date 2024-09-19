@@ -5,22 +5,17 @@ import java.awt.image.BufferedImage
 val DOWNLOADS_FOLDER = "downloads"
 
 enum class CompressionType {
-    LOSSY,   // More aggressive compression
-    LOSSLESS // Less aggressive or no compression (higher quality)
+    LOSSY, // More aggressive compression
+    LOSSLESS, // Less aggressive or no compression (higher quality)
 }
 
 enum class Services {
     COMPRESS,
     RESIZE,
-    CROP
+    CROP,
 }
 
-data class ImageProcessingResult(
-    val imageBytes: ByteArray,
-    val format: String,
-    val uniqueFileName: String = "",
-)
-
+data class ImageProcessingResult(val imageBytes: ByteArray, val format: String)
 
 fun writeImageWithFallback(image: BufferedImage, format: String): ImageProcessingResult {
     val outputStream = java.io.ByteArrayOutputStream()
@@ -85,4 +80,3 @@ fun getCompressionPercent(originalSize: Long, compressedSize: Long): Double {
         0.0
     }
 }
-

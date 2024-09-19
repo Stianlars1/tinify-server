@@ -1,12 +1,9 @@
 package dev.tinify.responses
 
-import dev.tinify.storage.ImageUtilities
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 
-class CustomHeaders {
-}
-
+class CustomHeaders
 
 // make all arguments optional to add..
 fun createCustomHeaders(
@@ -19,7 +16,6 @@ fun createCustomHeaders(
     contentType: MediaType? = null,
     customContentType: MediaType? = null,
     inline: Boolean? = false,
-
 ): HttpHeaders {
     val headers = HttpHeaders()
     headers.contentType = contentType // "image/<format>" === mediatype also.

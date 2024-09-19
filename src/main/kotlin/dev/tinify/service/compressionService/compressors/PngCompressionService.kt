@@ -19,15 +19,16 @@ class PngCompressionService {
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
-            val processBuilder = ProcessBuilder(
-                "pngquant",
-                "--quality=$quality",
-                "--speed=2",
-                "--output",
-                tempOutputFile.absolutePath,
-                "--force",
-                inputFile.absolutePath
-            )
+            val processBuilder =
+                ProcessBuilder(
+                    "pngquant",
+                    "--quality=$quality",
+                    "--speed=2",
+                    "--output",
+                    tempOutputFile.absolutePath,
+                    "--force",
+                    inputFile.absolutePath,
+                )
             logger.info("ProcessBuilder command: ${processBuilder.command()}")
 
             val process = processBuilder.start()
@@ -58,7 +59,13 @@ class PngCompressionService {
 
         try {
             val processBuilder =
-                ProcessBuilder("optipng", "-o7", "-out", tempOutputFile.absolutePath, inputFile.absolutePath)
+                ProcessBuilder(
+                    "optipng",
+                    "-o7",
+                    "-out",
+                    tempOutputFile.absolutePath,
+                    inputFile.absolutePath,
+                )
             logger.info("ProcessBuilder command: ${processBuilder.command()}")
 
             val process = processBuilder.start()

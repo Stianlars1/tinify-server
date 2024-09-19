@@ -21,33 +21,38 @@ class WebPCompressionService {
 
         try {
             // Command options for cwebp based on compression type
-            val command = when (compressionType) {
-                CompressionType.LOSSY -> {
-                    listOf(
-                        "cwebp",
-                        "-q",
-                        "70", // Quality set higher for a near-lossless compression (higher value = less quality loss)
-                        "-m",
-                        "6",  // Compression method, higher values spend more time searching for better compression
-                        "-o",
-                        tempOutputFile.absolutePath, // Output file
-                        inputFile.absolutePath // Input file
-                    )
-                }
+            val command =
+                when (compressionType) {
+                    CompressionType.LOSSY -> {
+                        listOf(
+                            "cwebp",
+                            "-q",
+                            "70", // Quality set higher for a near-lossless compression (higher
+                            // value = less quality loss)
+                            "-m",
+                            "6", // Compression method, higher values spend more time searching for
+                            // better compression
+                            "-o",
+                            tempOutputFile.absolutePath, // Output file
+                            inputFile.absolutePath, // Input file
+                        )
+                    }
 
-                CompressionType.LOSSLESS -> {
-                    listOf(
-                        "cwebp",
-                        "-q",
-                        "80", // Quality set higher for a near-lossless compression (higher value = less quality loss)
-                        "-m",
-                        "6",  // Compression method, higher values spend more time searching for better compression
-                        "-o",
-                        tempOutputFile.absolutePath,
-                        inputFile.absolutePath
-                    )
+                    CompressionType.LOSSLESS -> {
+                        listOf(
+                            "cwebp",
+                            "-q",
+                            "80", // Quality set higher for a near-lossless compression (higher
+                            // value = less quality loss)
+                            "-m",
+                            "6", // Compression method, higher values spend more time searching for
+                            // better compression
+                            "-o",
+                            tempOutputFile.absolutePath,
+                            inputFile.absolutePath,
+                        )
+                    }
                 }
-            }
 
             logger.info("ProcessBuilder command: $command")
 

@@ -13,7 +13,10 @@ class GifCompressionService {
 
     private val logger = LoggerFactory.getLogger(GifCompressionService::class.java)
 
-    fun compressGifUsingGifsicle(inputBytes: ByteArray, compressionType: CompressionType): ByteArray {
+    fun compressGifUsingGifsicle(
+        inputBytes: ByteArray,
+        compressionType: CompressionType,
+    ): ByteArray {
         logger.info("Compressing GIF using gifsicle")
 
         val tempInputFile = File.createTempFile("input-${UUID.randomUUID()}", ".gif")
@@ -26,14 +29,17 @@ class GifCompressionService {
             Files.write(tempInputFile.toPath(), inputBytes)
 
             // Build the gifsicle command
-            val command = mutableListOf(
-                "gifsicle", "--optimize=3", // Maximize optimization level
-                "--use-col=web", // Use web-safe color palette
-                "--lossy=10", // Enable lossy compression
-                "--loopcount=0", // Ensure animation loops forever
-                "--output", tempOutputFile.absolutePath, // Output file path
-                tempInputFile.absolutePath // Input file path
-            )
+            val command =
+                mutableListOf(
+                    "gifsicle",
+                    "--optimize=3", // Maximize optimization level
+                    "--use-col=web", // Use web-safe color palette
+                    "--lossy=10", // Enable lossy compression
+                    "--loopcount=0", // Ensure animation loops forever
+                    "--output",
+                    tempOutputFile.absolutePath, // Output file path
+                    tempInputFile.absolutePath, // Input file path
+                )
 
             logger.info("ProcessBuilder command: $command")
 

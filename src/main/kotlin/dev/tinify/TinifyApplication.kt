@@ -12,9 +12,7 @@ import javax.imageio.ImageIO
 
 val logger: Logger = LoggerFactory.getLogger(TinifyApplication::class.java)
 
-
-@SpringBootApplication
-class TinifyApplication
+@SpringBootApplication class TinifyApplication
 
 fun main(args: Array<String>) {
     logger.info("System PATH: ${System.getenv("PATH")}")
@@ -23,12 +21,10 @@ fun main(args: Array<String>) {
     runApplication<TinifyApplication>(*args)
 }
 
-
 // Check acvailable webp writers
 fun scanAndCheckAvailableImageWriters() {
     logger.info("\n\n==== Scanning for plugins ====")
     ImageIO.scanForPlugins()
-
 
     logger.info("\n\n==== All Readers ====")
     for (reader in ImageIO.getReaderFormatNames()) {
@@ -63,9 +59,8 @@ fun getDownloadsDirectory(): String {
     return Paths.get(basePath, DOWNLOADS_FOLDER).toString()
 }
 
-
 fun setupTempDir() {
-    lateinit var tempDir: String  // Declare tempDir as lateinit var
+    lateinit var tempDir: String // Declare tempDir as lateinit var
 
     // Use ApplicationHome to determine the base path dynamically
     val home = ApplicationHome(TinifyApplication::class.java)

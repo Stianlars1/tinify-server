@@ -9,6 +9,7 @@ class ResponseExceptions {
 
     @ExceptionHandler(MaxUploadSizeExceededException::class)
     fun handleMaxSizeException(e: MaxUploadSizeExceededException): ResponseEntity<String> {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body("File size exceeds the maximum allowed limit!")
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+            .body("File size exceeds the maximum allowed limit!")
     }
 }

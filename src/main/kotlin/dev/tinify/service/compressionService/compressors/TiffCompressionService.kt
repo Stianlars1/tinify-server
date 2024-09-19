@@ -1,12 +1,12 @@
 package dev.tinify.service.compressionService.compressors
 
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.util.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
 
 @Service
 class TiffCompressionService {
@@ -21,15 +21,19 @@ class TiffCompressionService {
 
         try {
             // Command for ImageMagick to compress TIFF
-            val command = listOf(
-                "convert",
-                inputFile.absolutePath,
-                "-strip",
-                "-type", "Palette", // Strip metadata and convert to palette type
-                "-compress", "JPEG",
-                "-quality", "75",
-                tempOutputFile.absolutePath
-            )
+            val command =
+                listOf(
+                    "convert",
+                    inputFile.absolutePath,
+                    "-strip",
+                    "-type",
+                    "Palette", // Strip metadata and convert to palette type
+                    "-compress",
+                    "JPEG",
+                    "-quality",
+                    "75",
+                    tempOutputFile.absolutePath,
+                )
 
             logger.info("ProcessBuilder command: $command")
 

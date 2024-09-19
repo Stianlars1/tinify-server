@@ -25,8 +25,7 @@ internal class CompressController(
     private val usageTrackerService: UsageTrackerService,
     private val fileStorageService: FileStorageService,
     private val imageUtilities: ImageUtilities,
-
-    ) {
+) {
     private val logger = LoggerFactory.getLogger(CompressController::class.java)
 
     @PostMapping
@@ -42,14 +41,15 @@ internal class CompressController(
             val imageRequestData = imageService.getImageFromRequest(file)
 
             // Compress the image
-            val compressionResult = compressService.compressImage(
-                imageRequestData, compressionType
-            )
+            val compressionResult = compressService.compressImage(imageRequestData, compressionType)
 
             // Store the compressed image
-            val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-                compressionResult.compressedData, imageRequestData.originalName, imageRequestData.originalFormat
-            )
+            val uniqueFileName =
+                fileStorageService.storeImageAndScheduleDeletion(
+                    compressionResult.compressedData,
+                    imageRequestData.originalName,
+                    imageRequestData.originalFormat,
+                )
 
             // Generate the download URL
             val downloadUrl = fileStorageService.createDownloadLink(uniqueFileName)
@@ -58,95 +58,47 @@ internal class CompressController(
             usageTrackerService.incrementServiceCount(Services.COMPRESS)
 
             // Prepare the response
-            val responseBody = ImageResponse(
-                url = downloadUrl,
-                originalFilename = imageRequestData.originalName,
-                originalFileSize = imageRequestData.originalFileSize.toString(),
-                originalFormat = imageRequestData.originalFormat,
-                compressedSize = compressionResult.compressedSize.toString(),
-                compressionPercentage = compressionResult.compressionPercentage.toString()
-            )
+            val responseBody =
+                ImageResponse(
+                    url = downloadUrl,
+                    originalFilename = imageRequestData.originalName,
+                    originalFileSize = imageRequestData.originalFileSize.toString(),
+                    originalFormat = imageRequestData.originalFormat,
+                    compressedSize = compressionResult.compressedSize.toString(),
+                    compressionPercentage = compressionResult.compressionPercentage.toString(),
+                )
 
-            val headers = createCustomHeaders(
-                originalFilename = imageRequestData.originalName,
-                originalFileSize = imageRequestData.originalFileSize.toString(),
-                originalFormat = imageRequestData.originalFormat,
-                compressedSize = compressionResult.compressedSize.toString(),
-                compressionPercentage = compressionResult.compressionPercentage.toString(),
-                uniqueFilename = uniqueFileName,
-                customContentType = imageUtilities.determineMediaType(
-                    compressionResult.compressedData,
-                    imageRequestData.originalName
-                ),
-                contentType = MediaType.APPLICATION_JSON,
-                inline = false,
-            )
+            val headers =
+                createCustomHeaders(
+                    originalFilename = imageRequestData.originalName,
+                    originalFileSize = imageRequestData.originalFileSize.toString(),
+                    originalFormat = imageRequestData.originalFormat,
+                    compressedSize = compressionResult.compressedSize.toString(),
+                    compressionPercentage = compressionResult.compressionPercentage.toString(),
+                    uniqueFilename = uniqueFileName,
+                    customContentType =
+                        imageUtilities.determineMediaType(
+                            compressionResult.compressedData,
+                            imageRequestData.originalName,
+                        ),
+                    contentType = MediaType.APPLICATION_JSON,
+                    inline = false,
+                )
 
             logger.debug("headers: \n {} \n\n", headers)
             logger.debug("Headers Content-Type: ${headers.contentType}")
-            logger.debug("Headers Content-Disposition: ${headers.get(HttpHeaders.CONTENT_DISPOSITION)}")
+            logger.debug(
+                "Headers Content-Disposition: ${headers.get(HttpHeaders.CONTENT_DISPOSITION)}"
+            )
             logger.debug("Headers X-Original-Filename: ${headers.get("X-Original-Filename")}")
 
             return ResponseEntity.ok().headers(headers).body(responseBody)
         } catch (e: Exception) {
             logger.error("Error compressing image: ${e.message}", e)
             return ResponseEntity.status(500)
-                .body(ImageResponse(isError = true, error = "Error compressing image: ${e.message}"))
+                .body(
+                    ImageResponse(isError = true, error = "Error compressing image: ${e.message}")
+                )
         }
     }
-
-    @PostMapping("/image")
-    fun compressImage(
-        @RequestParam("file") file: MultipartFile,
-        @RequestParam("compressionType", defaultValue = "LOSSLESS") compressionType: CompressionType,
-    ): ResponseEntity<ByteArray> {
-        logger.debug("\n\n== POST == ")
-        logger.debug("Incoming POST request on /api/compress/image")
-        logger.debug("Compression type: {}", compressionType)
-
-        // Get the original format, name, and image file from the request
-
-        // Get the image from the request
-        val imageRequestData = imageService.getImageFromRequest(file)
-        logger.debug("Original name: {}", imageRequestData.originalName)
-        logger.debug("Original format: {}", imageRequestData.originalFormat)
-        logger.debug("Original file size: {}", imageRequestData.originalFileSize)
-
-
-        // Compress the image
-        val compressionResult = compressService.compressImage(
-            imageRequestData, compressionType
-        )
-        // Store the compressed image
-        val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-            compressionResult.compressedData, imageRequestData.originalName, imageRequestData.originalFormat
-        )
-
-        // Generate the download URL
-        val downloadUrl = fileStorageService.createDownloadLink(uniqueFileName)
-
-
-        // Prepare the response headers to send back the image in the original format
-        val headers = HttpHeaders()
-        headers.contentType = MediaType.parseMediaType("image/${imageRequestData.originalFormat}")
-
-        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=$imageRequestData.originalName")
-
-        logger.debug("compressionResult - compressedSize: ${compressionResult.compressedSize}")
-        logger.debug("compressionResult - compressionPercentage: ${compressionResult.compressionPercentage}")
-        logger.debug("uniqueFileName: ${uniqueFileName}")
-        // Add compression metadata as custom headers
-        headers.add("X-Original-Size", compressionResult.originalSize.toString())
-        headers.add("X-Compressed-Size", compressionResult.compressedSize.toString())
-        headers.add("X-Compression-Percentage", compressionResult.compressionPercentage.toString())
-        headers.add("X-Unique-Filename", uniqueFileName)
-        headers.add("X-url", downloadUrl)
-
-        // Log the count for the usage tracking
-        usageTrackerService.incrementServiceCount(Services.COMPRESS)
-
-        // Return the compressed image data as the response body
-        return ResponseEntity.ok().headers(headers).body((compressionResult.compressedData))
-    }
-
 }
