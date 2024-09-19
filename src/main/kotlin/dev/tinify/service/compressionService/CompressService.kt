@@ -2,10 +2,7 @@ package dev.tinify.service
 
 import dev.tinify.CompressionType
 import dev.tinify.getCompressionPercent
-import dev.tinify.service.compressionService.compressors.GifCompressionService
-import dev.tinify.service.compressionService.compressors.JpegCompressionService
-import dev.tinify.service.compressionService.compressors.PngCompressionService
-import dev.tinify.service.compressionService.compressors.WebPCompressionService
+import dev.tinify.service.compressionService.compressors.*
 import dev.tinify.service.compressionService.createTempFileWithUniqueName
 import dev.tinify.storage.FileStorageService
 import org.slf4j.Logger
@@ -27,6 +24,7 @@ class CompressService(
     private val jpegCompressionService: JpegCompressionService,
     private val webpCompressionService: WebPCompressionService,
     private val gifCompressionService: GifCompressionService,
+    private val tiffCompressionService: TiffCompressionService,
 ) {
     private val logger: Logger = LoggerFactory.getLogger(CompressService::class.java)
 
@@ -36,19 +34,8 @@ class CompressService(
     ): CompressionResult {
         logger.info("Starting image compression")
 
-        val compressedBytes =
-            if (imageRequestData.originalFormat.equals("gif", ignoreCase = true) && imageRequestData.rawBytes != null) {
-                logger.debug("Processing as animated GIF")
-                gifCompressionService.compressGifUsingGifsicle(imageRequestData.rawBytes, compressionType)
-            } else {
-                logger.debug("Processing as static image")
-                // For static images, proceed as before
-                val imageFile = imageRequestData.imageFile
-                    ?: throw IllegalArgumentException("BufferedImage is null for non-GIF image")
-                val originalFormat = imageRequestData.originalFormat
-                val compressionTypeLocal = compressionType
-                compressBasedOnFormat(imageRequestData, compressionTypeLocal)
-            }
+        val compressedBytes = compressBasedOnFormat(imageRequestData, compressionType)
+
 
         val compressedSize = compressedBytes.size.toLong()
         val compressionPercentage = if (imageRequestData.originalFileSize > 0) {
@@ -74,6 +61,7 @@ class CompressService(
         val originalFormat = imageRequestData.originalFormat
         val originalFileName = imageRequestData.originalName
 
+        val rawBytes = imageRequestData.rawBytes
         val tempInputFile = createTempFileWithUniqueName(originalFileName, originalFormat)
         ImageIO.write(imageFile, originalFormat, tempInputFile)
 
@@ -93,6 +81,17 @@ class CompressService(
 
                 "webp" -> {
                     webpCompressionService.compressWebPUsingCwebp(tempInputFile, compressionType)
+                }
+
+                "tiff" -> {
+                    tiffCompressionService.compressTiffUsingImageMagick(tempInputFile)
+                }
+
+                "gif" -> {
+                    if (rawBytes == null) {
+                        throw IllegalArgumentException("Raw bytes are null for GIF image")
+                    }
+                    gifCompressionService.compressGifUsingGifsicle(rawBytes, compressionType)
                 }
 
                 else -> throw IllegalArgumentException("Unsupported image format: $originalFormat")

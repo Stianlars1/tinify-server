@@ -85,5 +85,14 @@ class ImageResponse {
 
 
 fun getCompressionPercent(originalSize: Long, compressedSize: Long): Double {
-    return 100.0 * (originalSize - compressedSize) / originalSize
+    // max 1 decimal
+    return try {
+        if (originalSize > 0) {
+            ((originalSize - compressedSize) * 100.0 / originalSize).toDouble()
+        } else {
+            0.0
+        }
+    } catch (e: Exception) {
+        0.0
+    }
 }
