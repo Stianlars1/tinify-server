@@ -35,6 +35,7 @@ class ResizeController(
         logger.debug("Incoming POST request on /api/resize")
         logger.debug("width: $width, height: $height, scale: $scale, keepAspectRatio: $keepAspectRatio")
         try {
+
             // Validate input parameters
             if (scale == null && width == null && height == null) {
                 logger.error("You must specify scale, width, or height.")
@@ -47,6 +48,10 @@ class ResizeController(
             logger.debug("imageRequestData - originalFormat: ${imageRequestData.originalFormat}")
             logger.debug("imageRequestData - originalFileSize: ${imageRequestData.originalFileSize}")
 
+            if (imageRequestData.imageFile == null) {
+                logger.error("BufferedImage is null for non-GIF image")
+                return ResponseEntity.badRequest().body("BufferedImage is null for non-GIF image".toByteArray())
+            }
             // Perform resizing
             val result = resizeService.resizeImage(
                 imageFile = imageRequestData.imageFile,

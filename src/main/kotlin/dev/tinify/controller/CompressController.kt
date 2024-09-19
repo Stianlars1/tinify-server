@@ -35,16 +35,16 @@ internal class CompressController(
         logger.debug("Compression type: {}", compressionType)
         try {
             // Get the image from the request
-            val (originalFormat, originalName, imageFile, originalFileSize) = imageService.getImageFromRequest(file)
+            val imageRequestData = imageService.getImageFromRequest(file)
 
             // Compress the image
             val compressionResult = compressService.compressImage(
-                imageFile, originalName, originalFormat, compressionType, originalFileSize
+                imageRequestData, compressionType
             )
 
             // Store the compressed image
             val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-                compressionResult.compressedData, originalName, originalFormat
+                compressionResult.compressedData, imageRequestData.originalName, imageRequestData.originalFormat
             )
 
             // Generate the download URL
@@ -56,7 +56,7 @@ internal class CompressController(
             // Prepare the response
             val responseBody = mapOf(
                 "url" to downloadUrl,
-                "originalFilename" to originalName,
+                "originalFilename" to imageRequestData.originalName,
                 "compressedSize" to compressionResult.compressedSize.toString(),
                 "compressionPercentage" to compressionResult.compressionPercentage.toString()
             )
@@ -78,19 +78,21 @@ internal class CompressController(
         logger.debug("Compression type: {}", compressionType)
 
         // Get the original format, name, and image file from the request
-        val (originalFormat, originalName, imageFile, originalFileSize) = imageService.getImageFromRequest(file)
-        logger.debug("Original name: $originalName")
-        logger.debug("Original format: $originalFormat")
-        logger.debug("Original file size: $originalFileSize")
+
+        // Get the image from the request
+        val imageRequestData = imageService.getImageFromRequest(file)
+        logger.debug("Original name: {}", imageRequestData.originalName)
+        logger.debug("Original format: {}", imageRequestData.originalFormat)
+        logger.debug("Original file size: {}", imageRequestData.originalFileSize)
 
 
-        // Compress the image and get the compression result (including stats)
-        val compressionResult =
-            compressService.compressImage(imageFile, originalName, originalFormat, compressionType, originalFileSize)
-
+        // Compress the image
+        val compressionResult = compressService.compressImage(
+            imageRequestData, compressionType
+        )
         // Store the compressed image
         val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
-            compressionResult.compressedData, originalName, originalFormat
+            compressionResult.compressedData, imageRequestData.originalName, imageRequestData.originalFormat
         )
 
         // Generate the download URL
@@ -99,9 +101,9 @@ internal class CompressController(
 
         // Prepare the response headers to send back the image in the original format
         val headers = HttpHeaders()
-        headers.contentType = MediaType.parseMediaType("image/${originalFormat}")
+        headers.contentType = MediaType.parseMediaType("image/${imageRequestData.originalFormat}")
 
-        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=$originalName")
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=$imageRequestData.originalName")
 
         logger.debug("compressionResult - compressedSize: ${compressionResult.compressedSize}")
         logger.debug("compressionResult - compressionPercentage: ${compressionResult.compressionPercentage}")

@@ -13,7 +13,7 @@ class PngCompressionService {
 
     private val logger: Logger = LoggerFactory.getLogger(PngCompressionService::class.java)
 
-    fun compressPngUsingPngQuant(inputFile: File, quality: String = "60-80"): ByteArray {
+    fun compressPngUsingPngQuant(inputFile: File, quality: String = "50-70"): ByteArray {
         logger.info("Compressing PNG using pngquant")
         val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
@@ -22,6 +22,7 @@ class PngCompressionService {
             val processBuilder = ProcessBuilder(
                 "pngquant",
                 "--quality=$quality",
+                "--speed=2",
                 "--output",
                 tempOutputFile.absolutePath,
                 "--force",

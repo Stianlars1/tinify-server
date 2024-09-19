@@ -5,15 +5,12 @@ import dev.tinify.storage.FileStorageService
 import dev.tinify.writeImageWithFallback
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.awt.image.BufferedImage
 
 @Service
 class CropService(private val fileStorageService: FileStorageService) {
     private val logger = LoggerFactory.getLogger(CropService::class.java)
     fun cropImage(
-        imageFile: BufferedImage,
-        originalFileName: String,
-        format: String,
+        imageRequestData: ImageRequestData,
         x: Int,
         y: Int,
         width: Int,
@@ -23,21 +20,21 @@ class CropService(private val fileStorageService: FileStorageService) {
         logger.debug("= cropImage =")
         // Validate the cropping rectangle
         if (x < 0 || y < 0 || width <= 0 || height <= 0 ||
-            x + width > imageFile.width || y + height > imageFile.height
+            x + width > imageRequestData.imageFile!!.width || y + height > imageRequestData.imageFile.height
         ) {
             logger.error("Invalid cropping rectangle.")
             throw IllegalArgumentException("Invalid cropping rectangle.")
         }
 
         // Perform the cropping operation
-        val croppedImage = imageFile.getSubimage(x, y, width, height)
+        val croppedImage = imageRequestData.imageFile.getSubimage(x, y, width, height)
         // Handle format-specific writing
-        val result = writeImageWithFallback(croppedImage, format)
+        val result = writeImageWithFallback(croppedImage, imageRequestData.originalFormat)
 
         // Store the image and get unique filename
         val uniqueFileName = fileStorageService.storeImageAndScheduleDeletion(
             result.imageBytes,
-            originalFileName,
+            imageRequestData.originalName,
             result.format
         )
         logger.debug("Unique filename: $uniqueFileName")

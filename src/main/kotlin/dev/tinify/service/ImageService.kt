@@ -10,7 +10,8 @@ import javax.imageio.ImageIO
 data class ImageRequestData(
     val originalFormat: String,
     val originalName: String,
-    val imageFile: BufferedImage,
+    val imageFile: BufferedImage?,
+    val rawBytes: ByteArray?,
     val originalFileSize: Long,
 )
 
@@ -22,44 +23,67 @@ class ImageService {
     fun getImageFromRequest(file: MultipartFile): ImageRequestData {
         logger.debug("\n\n== service ==")
         logger.debug("= getImageFromRequest =")
-        // Validate that the content type is an accepted image format
         val contentType = file.contentType
         logger.debug("Content type: $contentType")
+
         if (contentType == null || !isSupportedContentType(contentType)) {
             logger.error("Unsupported image format: $contentType")
             throw IllegalArgumentException("Unsupported image format: $contentType")
         }
 
-        // Extract the original file name
-        val originalName = file.originalFilename ?: "image.jpeg"
+        val originalName = file.originalFilename ?: "image.${contentType.split("/").last()}"
         logger.debug("Original name: $originalName")
-
-        // Extract the original format from the content type
         val originalFormat = contentType.split("/").last()
         logger.debug("Original format: $originalFormat")
 
-        // Convert MultipartFile to BufferedImage for further processing
-        val imageFile = try {
-            val imageBytes = file.bytes
-            val inputStream = ByteArrayInputStream(imageBytes)
-            ImageIO.read(inputStream) ?: throw IllegalArgumentException("Failed to read image")
-        } catch (e: Exception) {
-            throw RuntimeException("Error converting MultipartFile to BufferedImage", e)
-        }
-
-        // Get the original file size from the MultipartFile
         val originalFileSize = file.size
         logger.debug("Original file size: $originalFileSize")
 
-        // Return original format, original name, and BufferedImage
-        // Return ImageRequestData with all information
-        return ImageRequestData(
-            originalFormat = originalFormat,
-            originalName = originalName,
-            imageFile = imageFile,
-            originalFileSize = originalFileSize // Return the file size from the original file
-        )
+        val rawBytes = file.bytes
+
+        return if (originalFormat.equals("gif", ignoreCase = true) && isAnimatedGif(rawBytes)) {
+            logger.debug("Detected animated GIF")
+            ImageRequestData(
+                originalFormat = originalFormat,
+                originalName = originalName,
+                imageFile = null, // No BufferedImage for animated GIF
+                rawBytes = rawBytes,
+                originalFileSize = originalFileSize
+            )
+        } else {
+            logger.debug("Processing as static image")
+            val imageFile = try {
+                val inputStream = ByteArrayInputStream(rawBytes)
+                ImageIO.read(inputStream) ?: throw IllegalArgumentException("Failed to read image")
+            } catch (e: Exception) {
+                throw RuntimeException("Error converting MultipartFile to BufferedImage", e)
+            }
+
+            ImageRequestData(
+                originalFormat = originalFormat,
+                originalName = originalName,
+                imageFile = imageFile,
+                rawBytes = null, // No raw bytes for static images
+                originalFileSize = originalFileSize
+            )
+        }
     }
+
+
+    private fun isAnimatedGif(bytes: ByteArray): Boolean {
+        try {
+            val inputStream = ByteArrayInputStream(bytes)
+            val reader = ImageIO.getImageReadersByFormatName("gif").next()
+            reader.input = ImageIO.createImageInputStream(inputStream)
+            val numFrames = reader.getNumImages(true)
+            reader.dispose()
+            return numFrames > 1
+        } catch (e: Exception) {
+            logger.error("Error checking if GIF is animated", e)
+            return false
+        }
+    }
+
 
     private fun isSupportedContentType(contentType: String): Boolean {
         return contentType == "image/jpeg" ||

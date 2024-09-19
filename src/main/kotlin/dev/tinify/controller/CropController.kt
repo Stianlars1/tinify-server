@@ -38,12 +38,14 @@ class CropController(
             // Get the image from the request
             val imageRequestData = imageService.getImageFromRequest(file)
             logger.debug("Image data: {}", imageRequestData)
+            if (imageRequestData.imageFile == null) {
+                logger.error("BufferedImage is null for non-GIF image")
+                return ResponseEntity.badRequest().body("BufferedImage is null for non-GIF image".toByteArray())
+            }
 
             // Perform cropping
             val result = cropService.cropImage(
-                imageFile = imageRequestData.imageFile,
-                originalFileName = imageRequestData.originalName,
-                format = imageRequestData.originalFormat,
+                imageRequestData,
                 x = x,
                 y = y,
                 width = width,
