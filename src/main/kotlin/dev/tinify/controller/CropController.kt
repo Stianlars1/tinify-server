@@ -3,12 +3,13 @@ package dev.tinify.controller
 import dev.tinify.Services
 import dev.tinify.getCompressionPercent
 import dev.tinify.responses.ImageResponse
+import dev.tinify.responses.createCustomHeaders
 import dev.tinify.service.CropService
 import dev.tinify.service.ImageService
 import dev.tinify.service.UsageTrackerService
 import dev.tinify.storage.FileStorageService
+import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
@@ -24,6 +25,7 @@ class CropController(
     private val cropService: CropService,
     private val usageTrackerService: UsageTrackerService,
     private val fileStorageService: FileStorageService,
+    private val imageUtilities: ImageUtilities,
 ) {
     private val logger = LoggerFactory.getLogger(CropController::class.java)
 
@@ -65,13 +67,6 @@ class CropController(
             // Log the usage
             usageTrackerService.incrementServiceCount(Services.CROP)
 
-            // Prepare response
-            val headers = HttpHeaders()
-            headers.contentType = MediaType.parseMediaType("image/${cropResult.format}")
-            headers.set(
-                HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${cropResult.uniqueFileName}\""
-            )
-            headers.set("X-Unique-Filename", cropResult.uniqueFileName) // Include unique filename
 
             val compressPercent =
                 getCompressionPercent(imageRequestData.originalFileSize, cropResult.imageBytes.size.toLong())
@@ -85,8 +80,20 @@ class CropController(
                 compressedSize = cropResult.imageBytes.size.toString(),
                 compressionPercentage = compressPercent.toString()
             )
+            // Prepare the headers
+            val headers = createCustomHeaders(
+                originalFilename = imageRequestData.originalName,
+                originalFileSize = imageRequestData.originalFileSize.toString(),
+                originalFormat = imageRequestData.originalFormat,
+                compressedSize = cropResult.imageBytes.size.toString(),
+                compressionPercentage = compressPercent.toString(),
+                uniqueFilename = cropResult.uniqueFileName,
+                customContentType = imageUtilities.determineMediaType(cropResult.imageBytes,imageRequestData.originalName),
+                contentType = MediaType.APPLICATION_JSON,
+                inline = false,
+            )
 
-            return ResponseEntity.ok(responseBody)
+            return ResponseEntity.ok().headers(headers).body(responseBody)
         } catch (e: Exception) {
             // Handle exceptions
             logger.error("Error cropping image: ${e.message}")

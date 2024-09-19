@@ -3,10 +3,12 @@ package dev.tinify.controller
 import dev.tinify.CompressionType
 import dev.tinify.Services
 import dev.tinify.responses.ImageResponse
+import dev.tinify.responses.createCustomHeaders
 import dev.tinify.service.CompressService
 import dev.tinify.service.ImageService
 import dev.tinify.service.UsageTrackerService
 import dev.tinify.storage.FileStorageService
+import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -22,6 +24,7 @@ internal class CompressController(
     private val imageService: ImageService,
     private val usageTrackerService: UsageTrackerService,
     private val fileStorageService: FileStorageService,
+    private val imageUtilities: ImageUtilities,
 
     ) {
     private val logger = LoggerFactory.getLogger(CompressController::class.java)
@@ -64,7 +67,27 @@ internal class CompressController(
                 compressionPercentage = compressionResult.compressionPercentage.toString()
             )
 
-            return ResponseEntity.ok(responseBody)
+            val headers = createCustomHeaders(
+                originalFilename = imageRequestData.originalName,
+                originalFileSize = imageRequestData.originalFileSize.toString(),
+                originalFormat = imageRequestData.originalFormat,
+                compressedSize = compressionResult.compressedSize.toString(),
+                compressionPercentage = compressionResult.compressionPercentage.toString(),
+                uniqueFilename = uniqueFileName,
+                customContentType = imageUtilities.determineMediaType(
+                    compressionResult.compressedData,
+                    imageRequestData.originalName
+                ),
+                contentType = MediaType.APPLICATION_JSON,
+                inline = false,
+            )
+
+            logger.debug("headers: \n {} \n\n", headers)
+            logger.debug("Headers Content-Type: ${headers.contentType}")
+            logger.debug("Headers Content-Disposition: ${headers.get(HttpHeaders.CONTENT_DISPOSITION)}")
+            logger.debug("Headers X-Original-Filename: ${headers.get("X-Original-Filename")}")
+
+            return ResponseEntity.ok().headers(headers).body(responseBody)
         } catch (e: Exception) {
             logger.error("Error compressing image: ${e.message}", e)
             return ResponseEntity.status(500)

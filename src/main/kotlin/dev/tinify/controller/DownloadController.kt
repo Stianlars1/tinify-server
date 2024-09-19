@@ -3,11 +3,11 @@ package dev.tinify.controller
 import dev.tinify.storage.FileStorageService
 import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
-import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.nio.charset.StandardCharsets
+import java.io.File
+import java.nio.file.Files
 
 @RestController
 @RequestMapping("/api/download")
@@ -18,39 +18,63 @@ class DownloadController(
 ) {
     private val logger = LoggerFactory.getLogger(DownloadController::class.java)
 
-    @GetMapping("/{filename:.+}")
-    fun downloadFile(@PathVariable filename: String): ResponseEntity<ByteArray> {
-        logger.debug("Incoming GET request on /api/download/$filename")
+    @GetMapping("/{incomingFileName:.+}")
+    fun downloadImage(
+        @PathVariable incomingFileName: String,
+        @RequestParam(required = false) inline: Boolean?,
+    ): ResponseEntity<ByteArray> {
+        logger.debug("\n\n== GET == ")
+        logger.debug("Incoming GET request on /api/download/$incomingFileName \nwith inline option $inline")
+
 
         try {
+            // 1. Strip off any query parameters
+            val filename = incomingFileName.split("?")[0]
+            logger.debug("Filename without query params: $filename")
+
+
             // Step 1: Sanitize and validate the filename
             val sanitizedFilename = fileStorageService.sanitizeFilename(filename)
             logger.debug("Sanitized filename: $sanitizedFilename")
 
+            // 2.5 Check if the filename is valid
             if (sanitizedFilename != filename) {
                 logger.warn("Invalid filename: $filename")
                 return ResponseEntity.badRequest().body("Invalid filename".toByteArray())
             }
 
-            // Step 2: Load the image using FileStorageService
-            val (fileBytes, originalFilename) = fileStorageService.loadImage(sanitizedFilename)
-            if (fileBytes == null || originalFilename == null) {
-                logger.warn("File not found or could not be loaded: $sanitizedFilename")
+            // 3. Construct the path to the file
+            val imagePath = fileStorageService.getImagePath(sanitizedFilename)
+            logger.debug("Image path: $imagePath")
+            val file = File(imagePath)
+
+            // 4. Check if the file exists
+            if (!file.exists()) {
+                logger.warn("File not found: $filename")
                 return ResponseEntity.status(404).body("File not found".toByteArray())
             }
 
-            // Step 3: Determine the media type
+            // 5. Read the file content
+            val fileBytes = Files.readAllBytes(file.toPath())
+
+            // Step 6: Determine the media type
             val mediaType = imageUtilities.determineMediaType(fileBytes, sanitizedFilename)
             logger.debug("Determined media type: {}", mediaType)
 
-            // Step 4: Set the response headers to trigger a download
+
+            // 7. Extract the original filename
+            val originalFilename = fileStorageService.extractOriginalFilename(sanitizedFilename)
+            logger.debug("Original filename: $originalFilename")
+
+            // 8. Prepare response headers
             val headers = HttpHeaders()
             headers.contentType = mediaType
-            headers.contentDisposition = ContentDisposition.builder("attachment")
-                .filename(originalFilename, StandardCharsets.UTF_8)
-                .build()
-
-            // Step 5: Return the response with the file content and headers
+            if (inline == true) {
+                headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"$originalFilename\"")
+            } else {
+                headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$originalFilename\"")
+            }
+            // 9. Return the response with the image bytes and headers
             return ResponseEntity.ok()
                 .headers(headers)
                 .body(fileBytes)

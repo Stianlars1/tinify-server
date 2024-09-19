@@ -1,5 +1,6 @@
 package dev.tinify.service.compressionService.compressors
 
+import dev.tinify.CompressionType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -9,25 +10,25 @@ import java.nio.file.Files
 import java.util.*
 
 @Service
-class TiffCompressionService {
+class ImageMagickFallbackService {
 
-    private val logger: Logger = LoggerFactory.getLogger(TiffCompressionService::class.java)
+    private val logger: Logger = LoggerFactory.getLogger(ImageMagickFallbackService::class.java)
 
-    fun compressTiffUsingImageMagick(inputFile: File): ByteArray {
-        logger.info("Compressing TIFF using ImageMagick")
+    fun convertAndCompressUsingImageMagick(inputFile: File, compressionType: CompressionType): ByteArray {
+        logger.info("Attempting to convert and compress unsupported format using ImageMagick")
 
-        val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".tiff")
+        val tempOutputFile = File.createTempFile("converted-${UUID.randomUUID()}", ".jpg") // Using JPEG as fallback format
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
-            // Command for ImageMagick to compress TIFF
+            // Use ImageMagick to convert the image to a better supported format like JPEG or PNG
             val command = listOf(
                 "convert",
                 inputFile.absolutePath,
                 "-strip",
                 "-type", "Palette", // Strip metadata and convert to palette type
                 "-compress", "JPEG",
-                "-quality", "75",
+                "-quality", if (compressionType == CompressionType.LOSSLESS) "80" else "70", // Lossless or lossy based on input
                 tempOutputFile.absolutePath
             )
 
@@ -41,17 +42,17 @@ class TiffCompressionService {
 
             if (exitCode != 0) {
                 val errorMsg = process.inputStream.bufferedReader().readText()
-                logger.error("ImageMagick failed: $errorMsg")
-                throw RuntimeException("ImageMagick failed with exit code $exitCode")
+                logger.error("ImageMagick conversion failed: $errorMsg")
+                throw RuntimeException("ImageMagick conversion failed with exit code $exitCode")
             }
 
             val compressedBytes = Files.readAllBytes(tempOutputFile.toPath())
-            logger.info("Compressed TIFF file size: ${compressedBytes.size} bytes")
+            logger.info("Converted and compressed file size: ${compressedBytes.size} bytes")
 
             return compressedBytes
         } catch (e: IOException) {
-            logger.error("Error during TIFF compression", e)
-            throw RuntimeException("Error during TIFF compression: ${e.message}", e)
+            logger.error("Error during conversion and compression", e)
+            throw RuntimeException("Error during conversion and compression: ${e.message}", e)
         } finally {
             if (tempOutputFile.exists()) {
                 tempOutputFile.delete()

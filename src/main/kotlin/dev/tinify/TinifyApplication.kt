@@ -17,6 +17,7 @@ val logger: Logger = LoggerFactory.getLogger(TinifyApplication::class.java)
 class TinifyApplication
 
 fun main(args: Array<String>) {
+    logger.info("System PATH: ${System.getenv("PATH")}")
     setupTempDir()
     scanAndCheckAvailableImageWriters()
     runApplication<TinifyApplication>(*args)

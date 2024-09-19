@@ -1,3 +1,4 @@
+/*
 package dev.tinify.controller
 
 import dev.tinify.storage.FileStorageService
@@ -7,33 +8,35 @@ import org.springframework.http.MediaType
 import org.springframework.http.MediaTypeFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.util.MimeTypeUtils
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import java.io.File
 import java.nio.file.Files
-
 
 @RestController
 @RequestMapping("/api/images")
 class ImageController(
     private val fileStorageService: FileStorageService,
-
-    ) {
+) {
     private val logger = LoggerFactory.getLogger(ImageController::class.java)
 
-    @GetMapping("/{filename:.+}")
-    fun getImage(@PathVariable filename: String): ResponseEntity<ByteArray> {
+    @GetMapping("/{incomingFileName:.+}")
+    fun getImage(
+        @PathVariable incomingFileName: String,
+        @RequestParam(required = false) inline: Boolean?,
+    ): ResponseEntity<ByteArray> {
         logger.debug("\n\n== GET == ")
-        logger.debug("Incoming GET request on /api/images/$filename")
+        logger.debug("Incoming GET request on /api/images/$incomingFileName \nwith inline option $inline")
 
         try {
-            // 1. Sanitize the filename
-            logger.debug("Trying to sanitize filename")
+            // 1. Strip off any query parameters
+            val filename = incomingFileName.split("?")[0]
+            logger.debug("Filename without query params: $filename")
+
+            // 2. Sanitize the filename
             val sanitizedFilename = fileStorageService.sanitizeFilename(filename)
             logger.debug("Sanitized filename: $sanitizedFilename")
-            // 2. Check if the sanitized filename matches the input filename
+
+            // 2.5 Check if the filename is valid
             if (sanitizedFilename != filename) {
                 logger.warn("Invalid filename: $filename")
                 return ResponseEntity.badRequest().body("Invalid filename".toByteArray())
@@ -43,7 +46,6 @@ class ImageController(
             val imagePath = fileStorageService.getImagePath(sanitizedFilename)
             logger.debug("Image path: $imagePath")
             val file = File(imagePath)
-
 
             // 4. Check if the file exists
             if (!file.exists()) {
@@ -55,9 +57,14 @@ class ImageController(
             val bytes = Files.readAllBytes(file.toPath())
 
             // 6. Determine the media type based on the filename
-            val mediaType =
-                MediaTypeFactory.getMediaType(file.name).orElse(MimeTypeUtils.APPLICATION_OCTET_STREAM as MediaType?)
+            val mediaType = if (filename.endsWith(".svg")) {
+                MediaType.parseMediaType("image/svg+xml")
+            } else {
+                MediaTypeFactory.getMediaType(file.name).orElse(MimeTypeUtils.APPLICATION_OCTET_STREAM as MediaType)
+            }
+
             logger.debug("Media type: {}", mediaType)
+
             // 7. Extract the original filename
             val originalFilename = fileStorageService.extractOriginalFilename(sanitizedFilename)
             logger.debug("Original filename: $originalFilename")
@@ -65,12 +72,11 @@ class ImageController(
             // 8. Prepare response headers
             val headers = HttpHeaders()
             headers.contentType = mediaType
-            headers.set(
-                HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"$originalFilename\""
-            )
-
-
+            if (inline == true) {
+                headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"$originalFilename\"")
+            } else {
+                headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"$originalFilename\"")
+            }
             // 9. Return the response with the image bytes and headers
             return ResponseEntity.ok()
                 .headers(headers)
@@ -83,3 +89,4 @@ class ImageController(
 
 
 }
+*/

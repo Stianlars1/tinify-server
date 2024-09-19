@@ -44,8 +44,13 @@ class ImageUtilities {
 
 
     // Helper function to determine the media type from byte array
+// Helper function to determine the media type from byte array
     fun determineMediaType(fileBytes: ByteArray, filename: String): MediaType {
         // Try to determine the media type from the file extension
+        if (filename.endsWith(".svg")) {
+            return MediaType.parseMediaType("image/svg+xml") // Explicit return for SVG files
+        }
+
         val mediaTypeFromExtension = MediaTypeFactory.getMediaType(filename).orElse(null)
 
         if (mediaTypeFromExtension != null && mediaTypeFromExtension != MediaType.APPLICATION_OCTET_STREAM) {
@@ -55,6 +60,7 @@ class ImageUtilities {
         // Fallback to using magic numbers
         return getMediaTypeFromMagicNumbers(fileBytes)
     }
+
 
     // Function to determine media type using magic numbers
     private fun getMediaTypeFromMagicNumbers(fileBytes: ByteArray): MediaType {
