@@ -67,7 +67,8 @@ internal class CompressController(
             return ResponseEntity.ok(responseBody)
         } catch (e: Exception) {
             logger.error("Error compressing image: ${e.message}", e)
-            return ResponseEntity.status(500).body(ImageResponse(isError = true, error = "Error compressing image: ${e.message}"))
+            return ResponseEntity.status(500)
+                .body(ImageResponse(isError = true, error = "Error compressing image: ${e.message}"))
         }
     }
 

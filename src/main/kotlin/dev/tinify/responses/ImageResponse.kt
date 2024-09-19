@@ -1,6 +1,6 @@
 package dev.tinify.responses
 
-class ImageResponse (
+class ImageResponse(
     val url: String = "",
     val originalFilename: String = "",
     val originalFileSize: String = "",
@@ -8,5 +8,5 @@ class ImageResponse (
     val compressedSize: String = "",
     val compressionPercentage: String = "",
     val isError: Boolean = false,
-    val error: String = ""
-) 
+    val error: String = "",
+)

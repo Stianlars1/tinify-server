@@ -82,3 +82,8 @@ class ImageResponse {
     var status: Int = 0
     var errorMessage: String? = null
 }
+
+
+fun getCompressionPercent(originalSize: Long, compressedSize: Long): Double {
+    return 100.0 * (originalSize - compressedSize) / originalSize
+}

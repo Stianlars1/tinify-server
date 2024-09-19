@@ -25,9 +25,12 @@ class WebPCompressionService {
                 CompressionType.LOSSY -> {
                     listOf(
                         "cwebp",
-                        "-q", "70", // Quality set higher for a near-lossless compression (higher value = less quality loss)
-                        "-m", "6",  // Compression method, higher values spend more time searching for better compression
-                        "-o", tempOutputFile.absolutePath, // Output file
+                        "-q",
+                        "70", // Quality set higher for a near-lossless compression (higher value = less quality loss)
+                        "-m",
+                        "6",  // Compression method, higher values spend more time searching for better compression
+                        "-o",
+                        tempOutputFile.absolutePath, // Output file
                         inputFile.absolutePath // Input file
                     )
                 }
@@ -35,9 +38,12 @@ class WebPCompressionService {
                 CompressionType.LOSSLESS -> {
                     listOf(
                         "cwebp",
-                        "-q", "80", // Quality set higher for a near-lossless compression (higher value = less quality loss)
-                        "-m", "6",  // Compression method, higher values spend more time searching for better compression
-                        "-o", tempOutputFile.absolutePath,
+                        "-q",
+                        "80", // Quality set higher for a near-lossless compression (higher value = less quality loss)
+                        "-m",
+                        "6",  // Compression method, higher values spend more time searching for better compression
+                        "-o",
+                        tempOutputFile.absolutePath,
                         inputFile.absolutePath
                     )
                 }

@@ -1,6 +1,7 @@
 package dev.tinify.controller
 
 import dev.tinify.Services
+import dev.tinify.getCompressionPercent
 import dev.tinify.responses.ImageResponse
 import dev.tinify.service.CropService
 import dev.tinify.service.ImageService
@@ -72,7 +73,8 @@ class CropController(
             )
             headers.set("X-Unique-Filename", cropResult.uniqueFileName) // Include unique filename
 
-            val compressPercent = (imageRequestData.originalFileSize / cropResult.imageBytes.size) * 100
+            val compressPercent =
+                getCompressionPercent(imageRequestData.originalFileSize, cropResult.imageBytes.size.toLong())
 
             // Prepare the response
             val responseBody = ImageResponse(

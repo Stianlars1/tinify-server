@@ -1,6 +1,7 @@
 package dev.tinify.service
 
 import dev.tinify.CompressionType
+import dev.tinify.getCompressionPercent
 import dev.tinify.service.compressionService.compressors.GifCompressionService
 import dev.tinify.service.compressionService.compressors.JpegCompressionService
 import dev.tinify.service.compressionService.compressors.PngCompressionService
@@ -51,7 +52,7 @@ class CompressService(
 
         val compressedSize = compressedBytes.size.toLong()
         val compressionPercentage = if (imageRequestData.originalFileSize > 0) {
-            100.0 * (imageRequestData.originalFileSize - compressedSize) / imageRequestData.originalFileSize
+            getCompressionPercent(imageRequestData.originalFileSize, compressedSize)
         } else {
             0.0
         }
