@@ -1,20 +1,41 @@
+/*
 package dev.tinify.service.compressionService.compressors
 
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
+import dev.tinify.CompressionType
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.util.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
 
 @Service
 class PngCompressionService {
 
     private val logger: Logger = LoggerFactory.getLogger(PngCompressionService::class.java)
 
-    fun compressPngUsingPngQuant(inputFile: File, quality: String = "50-70"): ByteArray {
-        logger.info("Compressing PNG using pngquant")
+    // CompressionType enum is defined in the parent package, CompressionType.LOSSY or
+    // CompressionType.LOSSLESS
+    fun compressPng(inputFile: File, compressionType: CompressionType): ByteArray {
+        logger.info("=== compressPng ===")
+        logger.info("Compressing PNG file: ${inputFile.absolutePath}")
+        if (!inputFile.exists() || !inputFile.canRead()) {
+            throw RuntimeException(
+                "Input file is not accessible or doesn't exist: ${inputFile.absolutePath}"
+            )
+        }
+
+        return if (compressionType == CompressionType.LOSSY) {
+            compressPngLOSSY(inputFile)
+        } else {
+            compressPngLOSSLESS(inputFile)
+        }
+    }
+
+    // lossy
+    fun compressPngLOSSY(inputFile: File): ByteArray {
+        logger.info("Compressing PNG using LOSSY")
         val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
@@ -22,8 +43,8 @@ class PngCompressionService {
             val processBuilder =
                 ProcessBuilder(
                     "pngquant",
-                    "--quality=$quality",
-                    "--speed=2",
+                    "--quality=40-65",
+                    "--speed=1",
                     "--output",
                     tempOutputFile.absolutePath,
                     "--force",
@@ -46,24 +67,30 @@ class PngCompressionService {
             logger.error("Error during PNG compression", e)
             throw RuntimeException("Error during PNG compression: ${e.message}", e)
         } finally {
+            // Make sure you delete the tempOutputFile after reading its bytes
             if (tempOutputFile.exists()) {
-                tempOutputFile.delete()
+                logger.info("Temporary output file exists: ${tempOutputFile.absolutePath}")
+                tempOutputFile.delete() // Safely delete after compression is successful
                 logger.info("Temporary output file deleted")
             }
         }
     }
 
-    fun compressPngUsingOptiPNG(inputFile: File): ByteArray {
-        logger.info("Compressing PNG using OptiPNG for lossless compression")
+    // lossless
+    fun compressPngLOSSLESS(inputFile: File): ByteArray {
+        logger.info("Compressing PNG using LOSSLESS")
         val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
+        logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
             val processBuilder =
                 ProcessBuilder(
-                    "optipng",
-                    "-o7",
-                    "-out",
+                    "pngquant",
+                    "--quality=70-90",
+                    "--speed=1",
+                    "--output",
                     tempOutputFile.absolutePath,
+                    "--force",
                     inputFile.absolutePath,
                 )
             logger.info("ProcessBuilder command: ${processBuilder.command()}")
@@ -71,11 +98,11 @@ class PngCompressionService {
             val process = processBuilder.start()
             val exitCode = process.waitFor()
 
-            logger.info("OptiPNG process exited with code $exitCode")
+            logger.info("pngquant process exited with code $exitCode")
             if (exitCode != 0) {
                 val errorMsg = process.inputStream.bufferedReader().readText()
-                logger.error("OptiPNG failed: $errorMsg")
-                throw RuntimeException("OptiPNG failed with exit code $exitCode")
+                logger.error("pngquant failed: $errorMsg")
+                throw RuntimeException("pngquant failed with exit code $exitCode")
             }
 
             return Files.readAllBytes(tempOutputFile.toPath())
@@ -83,8 +110,130 @@ class PngCompressionService {
             logger.error("Error during PNG compression", e)
             throw RuntimeException("Error during PNG compression: ${e.message}", e)
         } finally {
+            // Make sure you delete the tempOutputFile after reading its bytes
             if (tempOutputFile.exists()) {
-                tempOutputFile.delete()
+                logger.info("Temporary output file exists: ${tempOutputFile.absolutePath}")
+                tempOutputFile.delete() // Safely delete after compression is successful
+                logger.info("Temporary output file deleted")
+            }
+        }
+    }
+}
+*/
+
+package dev.tinify.service.compressionService.compressors
+
+import dev.tinify.CompressionType
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.util.*
+
+@Service
+class PngCompressionService {
+
+    private val logger: Logger = LoggerFactory.getLogger(PngCompressionService::class.java)
+
+    // CompressionType enum is defined in the parent package, CompressionType.LOSSY or
+    // CompressionType.LOSSLESS
+    fun compressPng(inputFile: File, compressionType: CompressionType): ByteArray {
+        logger.info("=== compressPng ===")
+        logger.info("Compressing PNG file: ${inputFile.absolutePath}")
+        if (!inputFile.exists() || !inputFile.canRead()) {
+            throw RuntimeException(
+                "Input file is not accessible or doesn't exist: ${inputFile.absolutePath}"
+            )
+        }
+
+        return if (compressionType == CompressionType.LOSSY) {
+            compressPngLOSSY(inputFile)
+        } else {
+            compressPngLOSSLESS(inputFile)
+        }
+    }
+
+    // lossy
+    fun compressPngLOSSY(inputFile: File): ByteArray {
+        logger.info("Compressing PNG using LOSSY")
+        val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
+        logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
+
+        try {
+            val processBuilder =
+                ProcessBuilder(
+                    "pngquant",
+                    "--quality=60-80", // Lossy quality settings
+                    "--speed=1",
+                    "--output",
+                    tempOutputFile.absolutePath,
+                    "--force",
+                    inputFile.absolutePath,
+                )
+            logger.info("ProcessBuilder command: ${processBuilder.command()}")
+
+            val process = processBuilder.start()
+            val exitCode = process.waitFor()
+
+            logger.info("pngquant process exited with code $exitCode")
+            if (exitCode != 0) {
+                val errorMsg = process.inputStream.bufferedReader().readText()
+                logger.error("pngquant failed: $errorMsg")
+                throw RuntimeException("pngquant failed with exit code $exitCode")
+            }
+
+            return Files.readAllBytes(tempOutputFile.toPath())
+        } catch (e: IOException) {
+            logger.error("Error during PNG compression", e)
+            throw RuntimeException("Error during PNG compression: ${e.message}", e)
+        } finally {
+            // Make sure you delete the tempOutputFile after reading its bytes
+            if (tempOutputFile.exists()) {
+                logger.info("Temporary output file exists: ${tempOutputFile.absolutePath}")
+                tempOutputFile.delete() // Safely delete after compression is successful
+                logger.info("Temporary output file deleted")
+            }
+        }
+    }
+
+    // lossless using PNGCrush
+    fun compressPngLOSSLESS(inputFile: File): ByteArray {
+        logger.info("Compressing PNG using PNGCrush (LOSSLESS)")
+        val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
+        logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
+
+        try {
+            val processBuilder =
+                ProcessBuilder(
+                    "pngcrush",
+                    "-reduce", // Reduce the file size without affecting the image quality
+                    "-brute", // Use brute force to find better compression methods
+                    inputFile.absolutePath,
+                    tempOutputFile.absolutePath, // Output file
+                )
+            logger.info("ProcessBuilder command: ${processBuilder.command()}")
+
+            val process = processBuilder.start()
+            val exitCode = process.waitFor()
+
+            logger.info("pngcrush process exited with code $exitCode")
+            if (exitCode != 0) {
+                val errorMsg = process.inputStream.bufferedReader().readText()
+                logger.error("pngcrush failed: $errorMsg")
+                throw RuntimeException("pngcrush failed with exit code $exitCode")
+            }
+
+            return Files.readAllBytes(tempOutputFile.toPath())
+        } catch (e: IOException) {
+            logger.error("Error during PNG compression", e)
+            throw RuntimeException("Error during PNG compression: ${e.message}", e)
+        } finally {
+            // Make sure you delete the tempOutputFile after reading its bytes
+            if (tempOutputFile.exists()) {
+                logger.info("Temporary output file exists: ${tempOutputFile.absolutePath}")
+                tempOutputFile.delete() // Safely delete after compression is successful
                 logger.info("Temporary output file deleted")
             }
         }

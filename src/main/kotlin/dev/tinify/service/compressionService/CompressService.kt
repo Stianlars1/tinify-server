@@ -85,11 +85,7 @@ class CompressService(
             try {
                 when (originalFormat.lowercase()) {
                     "png" -> {
-                        if (compressionType == CompressionType.LOSSLESS) {
-                            pngCompressionService.compressPngUsingOptiPNG(tempInputFile)
-                        } else {
-                            pngCompressionService.compressPngUsingPngQuant(tempInputFile)
-                        }
+                        pngCompressionService.compressPng(tempInputFile, compressionType)
                     }
 
                     "jpeg",
