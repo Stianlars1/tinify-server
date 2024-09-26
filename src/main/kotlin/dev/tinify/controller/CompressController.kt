@@ -1,5 +1,6 @@
 package dev.tinify.controller
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import dev.tinify.CompressionType
 import dev.tinify.Services
 import dev.tinify.responses.ImageResponse
@@ -32,7 +33,7 @@ internal class CompressController(
     fun compress(
         @RequestParam("file") file: MultipartFile,
         @RequestParam("compressionType", defaultValue = "LOSSLESS") compressionType: CompressionType,
-    ): ResponseEntity<ImageResponse> {
+    ): ResponseEntity<out Any?>? {
         logger.debug("\n\n== POST == ")
         logger.debug("Incoming POST request on /api/compress")
         logger.debug("Compression type: {}", compressionType)
@@ -68,6 +69,13 @@ internal class CompressController(
                     compressionPercentage = compressionResult.compressionPercentage.toString(),
                 )
 
+            // Serialize the response body to JSON
+            val objectMapper = ObjectMapper()
+            val jsonResponse = objectMapper.writeValueAsString(responseBody)
+
+            // Calculate the byte size of the JSON string
+            val jsonResponseBytes = jsonResponse.toByteArray(Charsets.UTF_8)
+            // Create headers for the response
             val headers =
                 createCustomHeaders(
                     originalFilename = imageRequestData.originalName,
@@ -76,15 +84,13 @@ internal class CompressController(
                     compressedSize = compressionResult.compressedSize.toString(),
                     compressionPercentage = compressionResult.compressionPercentage.toString(),
                     uniqueFilename = uniqueFileName,
-                    customContentType =
-                        imageUtilities.determineMediaType(
-                            compressionResult.compressedData,
-                            imageRequestData.originalName,
-                        ),
+                    customContentType = MediaType.APPLICATION_JSON, // Ensure correct content type
                     contentType = MediaType.APPLICATION_JSON,
+                    contentLength = jsonResponseBytes.size.toLong(), // Set Content-Length manually
                     inline = false,
                 )
 
+            // Log headers for debugging
             logger.debug("headers: \n {} \n\n", headers)
             logger.debug("Headers Content-Type: ${headers.contentType}")
             logger.debug(
@@ -92,7 +98,11 @@ internal class CompressController(
             )
             logger.debug("Headers X-Original-Filename: ${headers.get("X-Original-Filename")}")
 
-            return ResponseEntity.ok().headers(headers).body(responseBody)
+            // Return the manually serialized JSON with the correct content-length
+            return ResponseEntity.ok()
+                .headers(headers)
+                .contentLength(jsonResponseBytes.size.toLong()) // Ensure Content-Length is correct
+                .body(jsonResponse) // Send the manually serialized JSON
         } catch (e: Exception) {
             logger.error("Error compressing image: ${e.message}", e)
             return ResponseEntity.status(500)

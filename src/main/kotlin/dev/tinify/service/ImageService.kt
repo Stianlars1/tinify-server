@@ -71,6 +71,15 @@ class ImageService {
                 rawBytes = rawBytes,
                 originalFileSize = originalFileSize,
             )
+        } else if (originalFormat == "pdf") {
+            logger.debug("Detected PDF file, skipping ImageIO")
+            return ImageRequestData(
+                originalFormat = originalFormat,
+                originalName = originalName,
+                imageFile = null, // No BufferedImage for PDF
+                rawBytes = rawBytes,
+                originalFileSize = originalFileSize,
+            )
         } else {
             // Try to process the image as a static image using ImageIO
             try {

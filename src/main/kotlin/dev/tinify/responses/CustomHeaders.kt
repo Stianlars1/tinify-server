@@ -15,10 +15,14 @@ fun createCustomHeaders(
     uniqueFilename: String? = null,
     contentType: MediaType? = null,
     customContentType: MediaType? = null,
+    contentLength: Long? = null,
     inline: Boolean? = false,
 ): HttpHeaders {
     val headers = HttpHeaders()
     headers.contentType = contentType // "image/<format>" === mediatype also.
+    if (contentLength != null) {
+        headers.contentLength = contentLength
+    }
     headers.set("X-Original-Filename", originalFilename)
     headers.set("X-Original-File-Size", originalFileSize)
     headers.set("X-Original-Format", originalFormat)

@@ -1,3 +1,4 @@
+/*
 package dev.tinify.service
 
 import dev.tinify.storage.FileStorageService
@@ -65,3 +66,4 @@ class ResizeService(private val fileStorageService: FileStorageService) {
         return resizedImageBytes
     }
 }
+*/

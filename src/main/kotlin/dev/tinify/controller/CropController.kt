@@ -12,6 +12,7 @@ import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.CrossOrigin
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -21,6 +22,7 @@ import java.io.File
 
 @RestController
 @RequestMapping("/api/crop")
+@CrossOrigin("*")
 class CropController(
     private val imageService: ImageService,
     private val cropService: CropService,

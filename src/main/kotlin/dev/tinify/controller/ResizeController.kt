@@ -5,13 +5,14 @@ import dev.tinify.getCompressionPercent
 import dev.tinify.responses.ImageResponse
 import dev.tinify.responses.createCustomHeaders
 import dev.tinify.service.ImageService
-import dev.tinify.service.ResizeService
 import dev.tinify.service.UsageTrackerService
+import dev.tinify.service.resizeService.ResizeService
 import dev.tinify.storage.FileStorageService
 import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.CrossOrigin
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -21,6 +22,7 @@ import java.io.File
 
 @RestController
 @RequestMapping("/api/resize")
+@CrossOrigin("*")
 class ResizeController(
     private val imageService: ImageService,
     private val resizeService: ResizeService,
@@ -110,7 +112,7 @@ class ResizeController(
                     originalFilename = imageRequestData.originalName,
                     originalFileSize = imageRequestData.originalFileSize.toString(),
                     originalFormat = imageRequestData.originalFormat,
-                    compressedSize = resizeByteArrayResult.toString(),
+                    compressedSize = resizeByteArrayResult.size.toString(),
                     compressionPercentage = compressPercent.toString(),
                 )
 

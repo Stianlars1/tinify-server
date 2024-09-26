@@ -104,6 +104,7 @@ class UsageTrackerService {
 
     @Synchronized
     fun getAllUsageData(): Map<String, Int> {
+        loadUsageData()
         return usageData
     }
 }

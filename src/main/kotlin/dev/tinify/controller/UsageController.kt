@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/usage")
+@RequestMapping("/api/usage")
 class UsageController(private val usageTrackerService: UsageTrackerService) {
     private val logger = LoggerFactory.getLogger(UsageController::class.java)
 
