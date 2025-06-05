@@ -17,37 +17,49 @@ class ImageMagickFallbackService {
     fun convertAndCompressUsingImageMagick(
         inputFile: File,
         compressionType: CompressionType,
+        outputFormat: String = "jpg",
     ): ByteArray {
         logger.info("Attempting to convert and compress unsupported format using ImageMagick")
 
         val tempOutputFile =
             File.createTempFile(
                 "converted-${UUID.randomUUID()}",
-                ".jpg",
-            ) // Using JPEG as fallback format
+                ".$outputFormat",
+            )
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
-            // Use ImageMagick to convert the image to a better supported format like JPEG or PNG
-            val command =
-                listOf(
-                    "convert",
-                    inputFile.absolutePath,
-                    "-strip",
-                    "-type",
-                    "Palette", // Strip metadata and convert to palette type
-                    "-compress",
-                    "JPEG",
-                    "-quality",
-                    if (compressionType == CompressionType.LOSSLESS) "80"
-                    else "70", // Lossless or lossy based on input
-                    tempOutputFile.absolutePath,
+            // Use ImageMagick to convert the image while preserving the original format when possible
+            val command = mutableListOf(
+                "convert",
+                inputFile.absolutePath,
+                "-strip",
+            )
+
+            if (outputFormat.equals("png", true)) {
+                // PNG supports transparency
+                command.addAll(listOf("-quality", if (compressionType == CompressionType.LOSSLESS) "100" else "90"))
+            } else {
+                command.addAll(
+                    listOf(
+                        "-type",
+                        "Palette",
+                        "-compress",
+                        "JPEG",
+                        "-quality",
+                        if (compressionType == CompressionType.LOSSLESS) "80" else "70",
+                    )
                 )
+            }
+
+            command.add(tempOutputFile.absolutePath)
 
             logger.info("ProcessBuilder command: $command")
 
             val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true)
+            processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD)
 
             val process = processBuilder.start()
             val exitCode = process.waitFor()

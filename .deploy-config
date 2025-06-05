@@ -1,0 +1,6 @@
+# generated 2025-06-05T16:18:41+02:00
+SSH_KEY_PATH="/Users/stian.larsen/Downloads/aws-upload/default_key/LightsailDefaultKey-eu-north-1.pem"
+REMOTE_SERVER="bitnami@16.171.76.229"
+REMOTE_PATH="/home/bitnami/htdocs/server"
+JAR_NAME="tinify_server-0.0.1-SNAPSHOT.jar"
+SERVER_DIR="/Users/stian.larsen/privat/nettsider/tinify/tinify_server"
