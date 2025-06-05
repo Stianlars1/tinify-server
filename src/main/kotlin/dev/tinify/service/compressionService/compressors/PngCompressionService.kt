@@ -43,8 +43,10 @@ class PngCompressionService {
             val pngquantProcess =
                 ProcessBuilder(
                     "pngquant",
-                    "--quality=70-80",
+                    "--quality=80-90",
                     "--speed=1",
+                    "--strip",
+                    "--skip-if-larger",
                     "--output",
                     tempPngquantFile.absolutePath,
                     "--force",
@@ -70,10 +72,9 @@ class PngCompressionService {
             var outputFile = tempPngquantFile
 
             // Step 2: Apply oxipng only if it reduces file size
-            val oxipngPath = "/home/bitnami/.cargo/bin/oxipng"
             val oxipngProcess =
                 ProcessBuilder(
-                    oxipngPath,
+                    "oxipng",
                     "--opt",
                     "max",
                     "--strip",
