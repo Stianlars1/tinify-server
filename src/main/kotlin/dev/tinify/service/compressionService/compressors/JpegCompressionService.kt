@@ -13,6 +13,82 @@ class JpegCompressionService {
 
     private val logger: Logger = LoggerFactory.getLogger(JpegCompressionService::class.java)
 
+    fun compressJpegUsingMozjpeg(inputFile: File, compressionType: CompressionType): ByteArray {
+
+        logger.info("Compressing JPEG using mozjpeg")
+
+        try {
+            // Create a temporary output file
+            val outputFile = File.createTempFile("compressed_", ".jpg")
+
+            // Build the command based on the compression type
+            val CJPEG_PATH = "/opt/mozjpeg/bin/cjpeg"
+            val JPEGTRAN_PATH = "/opt/mozjpeg/bin/jpegtran"
+
+            val command =
+                when (compressionType) {
+                    CompressionType.LOSSY -> {
+                        listOf(
+                            CJPEG_PATH,
+                            "-quality",
+                            "70",
+                            "-optimize",
+                            "-progressive",
+                            "-outfile",
+                            outputFile.absolutePath,
+                            inputFile.absolutePath,
+                        )
+                    }
+
+                    CompressionType.LOSSLESS -> {
+                        listOf(
+                            JPEGTRAN_PATH,
+                            "-copy",
+                            "none",
+                            "-optimize",
+                            "-progressive",
+                            "-outfile",
+                            outputFile.absolutePath,
+                            inputFile.absolutePath,
+                        )
+                    }
+                }
+
+            logger.info("Executing command: ${command.joinToString(" ")}")
+
+            // Execute the command
+            val processBuilder = ProcessBuilder(command)
+            processBuilder.redirectErrorStream(true)
+
+            val process = processBuilder.start()
+            val exitCode = process.waitFor()
+
+            val processOutput = process.inputStream.bufferedReader().readText()
+            if (processOutput.isNotBlank()) {
+                logger.info("mozjpeg output: $processOutput")
+            }
+
+            logger.info("mozjpeg process exited with code $exitCode")
+
+            if (exitCode != 0) {
+                logger.error("mozjpeg failed: $processOutput")
+                throw RuntimeException("mozjpeg failed with exit code $exitCode")
+            }
+
+            // Read the compressed file
+            val compressedBytes = Files.readAllBytes(outputFile.toPath())
+            logger.info("Compressed file size: ${compressedBytes.size} bytes")
+
+            // Clean up the temporary file
+            outputFile.delete()
+
+            return compressedBytes
+        } catch (e: IOException) {
+            logger.error("Error during JPEG compression", e)
+            throw RuntimeException("Error during JPEG compression: ${e.message}", e)
+        }
+    }
+
     fun compressJpegUsingJpegOptim(inputFile: File, compressionType: CompressionType): ByteArray {
         logger.info("Compressing JPEG using jpegoptim")
 
@@ -31,7 +107,13 @@ class JpegCompressionService {
                     }
 
                     CompressionType.LOSSLESS -> {
-                        listOf("jpegoptim", "--overwrite", inputFile.absolutePath)
+                        listOf(
+                            "jpegoptim",
+                            "--overwrite",
+                            "--all-progressive",
+                            "--optimise",
+                            inputFile.absolutePath,
+                        )
                     }
                 }
 

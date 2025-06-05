@@ -1,9 +1,9 @@
 package dev.tinify.service.resizeService.resizers
 
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Files
 import java.util.UUID
-import org.slf4j.LoggerFactory
 
 class JpegResizer : ImageResizer {
     private val logger = LoggerFactory.getLogger(JpegResizer::class.java)
@@ -33,9 +33,7 @@ class JpegResizer : ImageResizer {
         // command.add("sRGB")
 
         // General settings
-        // Optionally, add +profile "*" to preserve all profiles
-        command.add("+profile")
-        command.add("*")
+        // command.add("-strip") // uncomment this line to remove all profiles
 
         command.add("-sampling-factor")
         command.add("4:4:4")

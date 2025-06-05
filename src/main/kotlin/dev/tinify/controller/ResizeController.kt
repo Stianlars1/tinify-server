@@ -1,9 +1,12 @@
 package dev.tinify.controller
 
+import dev.tinify.CompressionType
 import dev.tinify.Services
 import dev.tinify.getCompressionPercent
 import dev.tinify.responses.ImageResponse
 import dev.tinify.responses.createCustomHeaders
+import dev.tinify.service.CompressService
+import dev.tinify.service.ImageRequestData
 import dev.tinify.service.ImageService
 import dev.tinify.service.UsageTrackerService
 import dev.tinify.service.resizeService.ResizeService
@@ -29,6 +32,7 @@ class ResizeController(
     private val usageTrackerService: UsageTrackerService,
     private val fileStorageService: FileStorageService,
     private val imageUtilities: ImageUtilities,
+    private val compressService: CompressService,
 ) {
     private val logger = LoggerFactory.getLogger(ResizeController::class.java)
 
@@ -39,11 +43,12 @@ class ResizeController(
         @RequestParam(required = false) height: Int?,
         @RequestParam(required = false) scale: Double?,
         @RequestParam(defaultValue = "true") keepAspectRatio: Boolean,
+        @RequestParam(defaultValue = "false") compress: Boolean,
     ): ResponseEntity<ImageResponse> {
         logger.debug("\n\n== RESIZE == ")
         logger.debug("Incoming POST request on /api/resize")
         logger.debug(
-            "width: $width, height: $height, scale: $scale, keepAspectRatio: $keepAspectRatio"
+            "width: $width, height: $height, scale: $scale, keepAspectRatio: $keepAspectRatio, compress: $compress"
         )
         var tempFile: File? = null // Declare tempFile outside of try block to reference in finally
 
@@ -71,10 +76,10 @@ class ResizeController(
 
             // Convert MultipartFile to a temporary File
             tempFile = File.createTempFile("upload-", ".${imageRequestData.originalFormat}")
-            file.transferTo(tempFile!!) // Save the uploaded image as a file
+            file.transferTo(tempFile) // Save the uploaded image as a file
 
             // Perform resizing
-            val resizeByteArrayResult =
+            var processedImageBytes =
                 resizeService.resizeImage(
                     imageFile = tempFile, // Use the temporary file
                     originalFileName = imageRequestData.originalName,
@@ -85,10 +90,34 @@ class ResizeController(
                     keepAspectRatio = keepAspectRatio,
                 )
 
-            // Store the compressed image
+            // If compress parameter is true, compress the resized image
+            if (compress) {
+                logger.debug("Compressing resized image")
+                logger.debug("Original resized size", processedImageBytes.size.toLong())
+
+                // Create ImageRequestData for the resized image
+                val resizedImageRequestData =
+                    ImageRequestData(
+                        originalName = imageRequestData.originalName,
+                        originalFormat = imageRequestData.originalFormat,
+                        originalFileSize = processedImageBytes.size.toLong(),
+                        imageFile = null, // Set to null if not available
+                        rawBytes = processedImageBytes,
+                    )
+
+                // Compress the resized image
+                val compressionResult =
+                    compressService.compressImage(resizedImageRequestData, CompressionType.LOSSLESS)
+
+                // Update processedImageBytes with compressed data
+                processedImageBytes = compressionResult.compressedData
+                logger.debug("Compressed resized size", processedImageBytes.size.toLong())
+            }
+
+            // Store the processed image (resized and possibly compressed)
             val uniqueFileName =
                 fileStorageService.storeImageAndScheduleDeletion(
-                    resizeByteArrayResult,
+                    processedImageBytes,
                     imageRequestData.originalName,
                     imageRequestData.originalFormat,
                 )
@@ -102,7 +131,7 @@ class ResizeController(
             val compressPercent =
                 getCompressionPercent(
                     imageRequestData.originalFileSize,
-                    resizeByteArrayResult.size.toLong(),
+                    processedImageBytes.size.toLong(),
                 )
 
             // Prepare the response
@@ -112,7 +141,7 @@ class ResizeController(
                     originalFilename = imageRequestData.originalName,
                     originalFileSize = imageRequestData.originalFileSize.toString(),
                     originalFormat = imageRequestData.originalFormat,
-                    compressedSize = resizeByteArrayResult.size.toString(),
+                    compressedSize = processedImageBytes.size.toString(),
                     compressionPercentage = compressPercent.toString(),
                 )
 
@@ -121,12 +150,12 @@ class ResizeController(
                     originalFilename = imageRequestData.originalName,
                     originalFileSize = imageRequestData.originalFileSize.toString(),
                     originalFormat = imageRequestData.originalFormat,
-                    compressedSize = resizeByteArrayResult.size.toString(),
+                    compressedSize = processedImageBytes.size.toString(),
                     compressionPercentage = compressPercent.toString(),
                     uniqueFilename = uniqueFileName,
                     customContentType =
                         imageUtilities.determineMediaType(
-                            resizeByteArrayResult,
+                            processedImageBytes,
                             imageRequestData.originalName,
                         ),
                     contentType = MediaType.APPLICATION_JSON,
@@ -136,7 +165,7 @@ class ResizeController(
             return ResponseEntity.ok().headers(headers).body(responseBody)
         } catch (e: Exception) {
             // Handle exceptions
-            logger.error("Error resizing image: ${e.message}")
+            logger.error("Error resizing image: ${e.message}", e)
             return ResponseEntity.status(500)
                 .body(ImageResponse(isError = true, error = "Error resizing image: ${e.message}"))
         } finally {

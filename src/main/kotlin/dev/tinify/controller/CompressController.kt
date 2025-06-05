@@ -9,7 +9,6 @@ import dev.tinify.service.CompressService
 import dev.tinify.service.ImageService
 import dev.tinify.service.UsageTrackerService
 import dev.tinify.storage.FileStorageService
-import dev.tinify.storage.ImageUtilities
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -25,7 +24,6 @@ internal class CompressController(
     private val imageService: ImageService,
     private val usageTrackerService: UsageTrackerService,
     private val fileStorageService: FileStorageService,
-    private val imageUtilities: ImageUtilities,
 ) {
     private val logger = LoggerFactory.getLogger(CompressController::class.java)
 
@@ -33,7 +31,7 @@ internal class CompressController(
     fun compress(
         @RequestParam("file") file: MultipartFile,
         @RequestParam("compressionType", defaultValue = "LOSSLESS") compressionType: CompressionType,
-    ): ResponseEntity<out Any?>? {
+    ): ResponseEntity<out Any?> {
         logger.debug("\n\n== POST == ")
         logger.debug("Incoming POST request on /api/compress")
         logger.debug("Compression type: {}", compressionType)

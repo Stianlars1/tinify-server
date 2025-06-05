@@ -1,13 +1,12 @@
 package dev.tinify.service
 
-import dev.tinify.storage.FileStorageService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.Files
 
 @Service
-class CropService(private val fileStorageService: FileStorageService) {
+class CropService() {
     private val logger = LoggerFactory.getLogger(CropService::class.java)
 
     fun cropImage(

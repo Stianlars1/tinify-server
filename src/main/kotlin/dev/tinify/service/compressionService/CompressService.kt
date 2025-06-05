@@ -4,13 +4,13 @@ import dev.tinify.CompressionType
 import dev.tinify.getCompressionPercent
 import dev.tinify.service.compressionService.compressors.*
 import dev.tinify.service.compressionService.createTempFileWithUniqueName
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
 import java.io.File
 import java.nio.file.Files
 import java.util.*
 import javax.imageio.ImageIO
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
 
 data class CompressionResult(
     val compressedData: ByteArray,
@@ -94,7 +94,7 @@ class CompressService(
 
                     "jpeg",
                     "jpg" ->
-                        jpegCompressionService.compressJpegUsingJpegOptim(
+                        jpegCompressionService.compressJpegUsingMozjpeg(
                             tempInputFile,
                             compressionType,
                         )
