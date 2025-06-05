@@ -1,9 +1,9 @@
 package dev.tinify.service.resizeService.resizers
 
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Files
 import java.util.*
-import org.slf4j.LoggerFactory
 
 class ImageMagickResizer : ImageResizer {
     private val logger = LoggerFactory.getLogger(ImageMagickResizer::class.java)
@@ -36,6 +36,7 @@ class ImageMagickResizer : ImageResizer {
                 when {
                     width != null && height != null ->
                         "${width}x${height}${if (!keepAspectRatio) "!" else ""}"
+
                     width != null -> "${width}x"
                     height != null -> "x${height}"
                     else -> throw IllegalArgumentException("Width or height must be specified")
