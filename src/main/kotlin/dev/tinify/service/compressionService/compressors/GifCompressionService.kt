@@ -45,9 +45,17 @@ class GifCompressionService {
 
             val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true)
+            processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD)
 
             val process = processBuilder.start()
-            val exitCode = process.waitFor()
+            val exitCode =
+                if (process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.exitValue()
+                } else {
+                    process.destroyForcibly()
+                    throw RuntimeException("gifsicle process timeout")
+                }
 
             if (exitCode != 0) {
                 val errorMsg = process.inputStream.bufferedReader().readText()

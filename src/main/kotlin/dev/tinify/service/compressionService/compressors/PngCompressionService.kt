@@ -43,15 +43,23 @@ class PngCompressionService {
             val pngquantProcess =
                 ProcessBuilder(
                         "pngquant",
-                        "--quality=60-80", // Adjusted to a higher quality range
+                        "--quality=60-80",
                         "--speed=1",
                         "--output",
                         tempPngquantFile.absolutePath,
                         "--force",
                         inputFile.absolutePath,
                     )
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start()
-            val pngquantExitCode = pngquantProcess.waitFor()
+            val pngquantExitCode =
+                if (pngquantProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    pngquantProcess.exitValue()
+                } else {
+                    pngquantProcess.destroyForcibly()
+                    throw RuntimeException("pngquant process timeout")
+                }
             if (pngquantExitCode != 0) {
                 val errorMsg = pngquantProcess.errorStream.bufferedReader().readText()
                 logger.error("pngquant failed: $errorMsg")
@@ -74,8 +82,16 @@ class PngCompressionService {
                         finalOutputFile.absolutePath,
                         tempPngquantFile.absolutePath,
                     )
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start()
-            val oxipngExitCode = oxipngProcess.waitFor()
+            val oxipngExitCode =
+                if (oxipngProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    oxipngProcess.exitValue()
+                } else {
+                    oxipngProcess.destroyForcibly()
+                    throw RuntimeException("oxipng process timeout")
+                }
 
             if (oxipngExitCode == 0) {
                 val oxipngSize = finalOutputFile.length()
@@ -122,18 +138,26 @@ class PngCompressionService {
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
-            val processBuilder =
-                ProcessBuilder(
-                    "pngcrush",
-                    "-reduce", // Reduce the file size without affecting the image quality
-                    "-brute", // Use brute force to find better compression methods
-                    inputFile.absolutePath,
-                    tempOutputFile.absolutePath, // Output file
-                )
-            logger.info("ProcessBuilder command: ${processBuilder.command()}")
+        val processBuilder =
+            ProcessBuilder(
+                "pngcrush",
+                "-reduce",
+                "-q",
+                inputFile.absolutePath,
+                tempOutputFile.absolutePath,
+            )
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+        logger.info("ProcessBuilder command: ${processBuilder.command()}")
 
-            val process = processBuilder.start()
-            val exitCode = process.waitFor()
+        val process = processBuilder.start()
+        val exitCode =
+            if (process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.exitValue()
+            } else {
+                process.destroyForcibly()
+                throw RuntimeException("pngcrush process timeout")
+            }
 
             logger.info("pngcrush process exited with code $exitCode")
             if (exitCode != 0) {

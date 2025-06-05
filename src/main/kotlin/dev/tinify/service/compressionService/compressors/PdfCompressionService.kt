@@ -34,8 +34,17 @@ class PdfCompressionService {
                 )
             logger.info("ProcessBuilder command: ${processBuilder.command()}")
 
-            val process = processBuilder.start()
-            val exitCode = process.waitFor()
+            val process = processBuilder
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+            val exitCode =
+                if (process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.exitValue()
+                } else {
+                    process.destroyForcibly()
+                    throw RuntimeException("Ghostscript process timeout")
+                }
 
             logger.info("Ghostscript process exited with code $exitCode")
             if (exitCode != 0) {

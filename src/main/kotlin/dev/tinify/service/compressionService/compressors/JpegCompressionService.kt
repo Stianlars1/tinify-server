@@ -59,9 +59,17 @@ class JpegCompressionService {
             // Execute the command
             val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true)
+            processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD)
 
             val process = processBuilder.start()
-            val exitCode = process.waitFor()
+            val exitCode =
+                if (process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.exitValue()
+                } else {
+                    process.destroyForcibly()
+                    throw RuntimeException("mozjpeg process timeout")
+                }
 
             val processOutput = process.inputStream.bufferedReader().readText()
             if (processOutput.isNotBlank()) {
@@ -121,9 +129,17 @@ class JpegCompressionService {
 
             val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true)
+            processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD)
 
             val process = processBuilder.start()
-            val exitCode = process.waitFor()
+            val exitCode =
+                if (process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.exitValue()
+                } else {
+                    process.destroyForcibly()
+                    throw RuntimeException("jpegoptim process timeout")
+                }
 
             logger.info("jpegoptim process exited with code $exitCode")
             if (exitCode != 0) {

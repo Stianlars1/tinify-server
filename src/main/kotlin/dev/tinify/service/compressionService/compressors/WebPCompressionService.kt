@@ -58,9 +58,17 @@ class WebPCompressionService {
 
             val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true)
+            processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD)
 
             val process = processBuilder.start()
-            val exitCode = process.waitFor()
+            val exitCode =
+                if (process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.exitValue()
+                } else {
+                    process.destroyForcibly()
+                    throw RuntimeException("cwebp process timeout")
+                }
 
             logger.info("cwebp process exited with code $exitCode")
             if (exitCode != 0) {
