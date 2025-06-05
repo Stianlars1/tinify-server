@@ -27,8 +27,8 @@ class WebPCompressionService {
                         listOf(
                             "cwebp",
                             "-q",
-                            "70", // Quality set higher for a near-lossless compression (higher
-                            // value = less quality loss)
+                            // Balance quality and size
+                            "80",
                             "-m",
                             "6", // Compression method, higher values spend more time searching for
                             // better compression
@@ -42,8 +42,8 @@ class WebPCompressionService {
                         listOf(
                             "cwebp",
                             "-q",
-                            "80", // Quality set higher for a near-lossless compression (higher
-                            // value = less quality loss)
+                            // Slightly higher quality for lossless conversion
+                            "85",
                             "-m",
                             "6", // Compression method, higher values spend more time searching for
                             // better compression

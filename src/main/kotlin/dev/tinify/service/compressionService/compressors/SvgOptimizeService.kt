@@ -18,17 +18,12 @@ class SvgOptimizeService {
             // Write the original SVG bytes to the temp input file
             Files.write(tempInputFile.toPath(), svgBytes)
 
-            val svgoPath = "/opt/bitnami/node/bin/svgo"
+            // Use svgo from PATH for portability across environments
             val command =
-                listOf(svgoPath, tempInputFile.absolutePath, "-o", tempOutputFile.absolutePath)
+                listOf("svgo", tempInputFile.absolutePath, "-o", tempOutputFile.absolutePath)
             val processBuilder = ProcessBuilder(command)
 
-            // Add the path to `node` to the environment
-            val environment = processBuilder.environment()
-            environment["PATH"] = "/opt/bitnami/node/bin:" + environment["PATH"]
-
             logger.debug("ProcessBuilder command: {}", command.joinToString(" "))
-            logger.debug("Effective PATH: ${environment["PATH"]}")
 
             val process = processBuilder.start()
             process.waitFor()

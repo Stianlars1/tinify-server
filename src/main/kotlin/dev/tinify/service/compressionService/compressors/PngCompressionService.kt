@@ -43,11 +43,12 @@ class PngCompressionService {
             val pngquantProcess =
                 ProcessBuilder(
                     "pngquant",
-                    "--quality=70-80",
+                    // Balance quality and size similar to tinypng default settings
+                    "--quality=65-80",
                     "--speed=1",
+                    "--skip-if-larger",
                     "--output",
                     tempPngquantFile.absolutePath,
-                    "--force",
                     inputFile.absolutePath,
                 )
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
@@ -60,7 +61,13 @@ class PngCompressionService {
                     pngquantProcess.destroyForcibly()
                     throw RuntimeException("pngquant process timeout")
                 }
-            if (pngquantExitCode != 0) {
+
+            if (pngquantExitCode == 98) {
+                // pngquant skipped compression because the result would be larger
+                // Copy the original file so downstream steps operate on a valid file
+                Files.copy(inputFile.toPath(), tempPngquantFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                logger.info("pngquant skipped compression; using original input")
+            } else if (pngquantExitCode != 0) {
                 val errorMsg = pngquantProcess.errorStream.bufferedReader().readText()
                 logger.error("pngquant failed: $errorMsg")
                 throw RuntimeException("pngquant failed with exit code $pngquantExitCode")
@@ -70,7 +77,8 @@ class PngCompressionService {
             var outputFile = tempPngquantFile
 
             // Step 2: Apply oxipng only if it reduces file size
-            val oxipngPath = "/home/bitnami/.cargo/bin/oxipng"
+            // Use the oxipng binary from PATH so installations are portable
+            val oxipngPath = "oxipng"
             val oxipngProcess =
                 ProcessBuilder(
                     oxipngPath,

@@ -31,7 +31,8 @@ class TiffCompressionService {
                     "-compress",
                     "JPEG",
                     "-quality",
-                    "75",
+                    // Moderate quality to keep size reasonable
+                    "80",
                     tempOutputFile.absolutePath,
                 )
 

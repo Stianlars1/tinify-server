@@ -21,9 +21,11 @@ class JpegCompressionService {
             // Create a temporary output file
             val outputFile = File.createTempFile("compressed_", ".jpg")
 
-            // Build the command based on the compression type
-            val CJPEG_PATH = "/opt/mozjpeg/bin/cjpeg"
-            val JPEGTRAN_PATH = "/opt/mozjpeg/bin/jpegtran"
+            // Build the command based on the compression type. Use binaries
+            // available on the system PATH so the service does not rely on
+            // hard coded installation locations.
+            val CJPEG_PATH = "cjpeg"
+            val JPEGTRAN_PATH = "jpegtran"
 
             val command =
                 when (compressionType) {
@@ -31,7 +33,8 @@ class JpegCompressionService {
                         listOf(
                             CJPEG_PATH,
                             "-quality",
-                            "70",
+                            // Moderate quality to balance size and fidelity
+                            "82",
                             "-optimize",
                             "-progressive",
                             "-outfile",
@@ -107,7 +110,8 @@ class JpegCompressionService {
                     CompressionType.LOSSY -> {
                         listOf(
                             "jpegoptim",
-                            "--max=70",
+                            // Similar quality level for jpegoptim
+                            "--max=82",
                             "--strip-all",
                             "--overwrite",
                             inputFile.absolutePath,
