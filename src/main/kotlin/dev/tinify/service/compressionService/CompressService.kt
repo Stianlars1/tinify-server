@@ -88,7 +88,6 @@ class CompressService(
                     "png" -> {
                         pngCompressionService.compressPng(tempInputFile, compressionType)
                     }
-
                     "pdf" -> {
                         pdfCompressionService.compressPdf(tempInputFile)
                     }
@@ -99,13 +98,11 @@ class CompressService(
                             tempInputFile,
                             compressionType,
                         )
-
                     "webp" ->
                         webpCompressionService.compressWebPUsingCwebp(
                             tempInputFile,
                             compressionType,
                         )
-
                     "tiff" -> tiffCompressionService.compressTiffUsingImageMagick(tempInputFile)
                     "gif" -> {
                         if (rawBytes == null) {
