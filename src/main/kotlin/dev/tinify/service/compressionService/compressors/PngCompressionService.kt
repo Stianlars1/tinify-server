@@ -42,14 +42,14 @@ class PngCompressionService {
             // Step 1: pngquant lossy compression
             val pngquantProcess =
                 ProcessBuilder(
-                    "pngquant",
-                    "--quality=60-80",
-                    "--speed=1",
-                    "--output",
-                    tempPngquantFile.absolutePath,
-                    "--force",
-                    inputFile.absolutePath,
-                )
+                        "pngquant",
+                        "--quality=60-80",
+                        "--speed=1",
+                        "--output",
+                        tempPngquantFile.absolutePath,
+                        "--force",
+                        inputFile.absolutePath,
+                    )
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start()
@@ -73,15 +73,15 @@ class PngCompressionService {
             val oxipngPath = "/home/bitnami/.cargo/bin/oxipng"
             val oxipngProcess =
                 ProcessBuilder(
-                    oxipngPath,
-                    "--opt",
-                    "max",
-                    "--strip",
-                    "safe",
-                    "--out",
-                    finalOutputFile.absolutePath,
-                    tempPngquantFile.absolutePath,
-                )
+                        oxipngPath,
+                        "--opt",
+                        "max",
+                        "--strip",
+                        "safe",
+                        "--out",
+                        finalOutputFile.absolutePath,
+                        tempPngquantFile.absolutePath,
+                    )
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start()
@@ -138,26 +138,26 @@ class PngCompressionService {
         logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
-            val processBuilder =
-                ProcessBuilder(
-                    "pngcrush",
-                    "-reduce",
-                    "-q",
-                    inputFile.absolutePath,
-                    tempOutputFile.absolutePath,
-                )
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-            logger.info("ProcessBuilder command: ${processBuilder.command()}")
+        val processBuilder =
+            ProcessBuilder(
+                "pngcrush",
+                "-reduce",
+                "-q",
+                inputFile.absolutePath,
+                tempOutputFile.absolutePath,
+            )
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+        logger.info("ProcessBuilder command: ${processBuilder.command()}")
 
-            val process = processBuilder.start()
-            val exitCode =
-                if (process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
-                    process.exitValue()
-                } else {
-                    process.destroyForcibly()
-                    throw RuntimeException("pngcrush process timeout")
-                }
+        val process = processBuilder.start()
+        val exitCode =
+            if (process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.exitValue()
+            } else {
+                process.destroyForcibly()
+                throw RuntimeException("pngcrush process timeout")
+            }
 
             logger.info("pngcrush process exited with code $exitCode")
             if (exitCode != 0) {

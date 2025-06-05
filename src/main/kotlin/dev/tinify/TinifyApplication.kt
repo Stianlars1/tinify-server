@@ -12,7 +12,14 @@ import javax.imageio.ImageIO
 
 val logger: Logger = LoggerFactory.getLogger(TinifyApplication::class.java)
 
-@SpringBootApplication class TinifyApplication
+@SpringBootApplication
+class TinifyApplication {
+    @jakarta.annotation.PostConstruct
+    fun disableProcessBuilderDebug() {
+        System.clearProperty("processbuilder.debug")
+        System.clearProperty("jdk.lang.ProcessBuilder.debug")
+    }
+}
 
 fun main(args: Array<String>) {
     logger.info("System PATH: ${System.getenv("PATH")}")

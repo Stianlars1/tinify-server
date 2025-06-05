@@ -25,7 +25,7 @@ class PdfCompressionService {
                     "-sDEVICE=pdfwrite",
                     "-dCompatibilityLevel=1.4",
                     "-dPDFSETTINGS=/screen", // Compression level (/screen is low quality, /ebook is
-                    // medium, /prepress is high quality)
+                                             // medium, /prepress is high quality)
                     "-dNOPAUSE",
                     "-dQUIET",
                     "-dBATCH",
