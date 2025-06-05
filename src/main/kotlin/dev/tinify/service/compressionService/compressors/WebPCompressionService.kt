@@ -1,3 +1,4 @@
+// WebPCompressionService.kt (updated)
 package dev.tinify.service.compressionService.compressors
 
 import dev.tinify.CompressionType
@@ -17,79 +18,41 @@ class WebPCompressionService {
     fun compressWebPUsingCwebp(inputFile: File, compressionType: CompressionType): ByteArray {
         logger.info("Compressing WebP using cwebp")
         val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".webp")
-        logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
 
         try {
-            // Command options for cwebp based on compression type
-            val command =
-                when (compressionType) {
-                    CompressionType.LOSSY -> {
-                        listOf(
-                            "cwebp",
-                            "-q",
-                            "70", // Quality set higher for a near-lossless compression (higher
-                            // value = less quality loss)
-                            "-m",
-                            "6", // Compression method, higher values spend more time searching for
-                            // better compression
-                            "-o",
-                            tempOutputFile.absolutePath, // Output file
-                            inputFile.absolutePath, // Input file
-                        )
-                    }
+            val command = when (compressionType) {
+                CompressionType.LOSSY -> listOf(
+                    "cwebp", "-mt", "-q", "70", "-m", "6",
+                    "-o", tempOutputFile.absolutePath, inputFile.absolutePath
+                )
 
-                    CompressionType.LOSSLESS -> {
-                        listOf(
-                            "cwebp",
-                            "-q",
-                            "80", // Quality set higher for a near-lossless compression (higher
-                            // value = less quality loss)
-                            "-m",
-                            "6", // Compression method, higher values spend more time searching for
-                            // better compression
-                            "-o",
-                            tempOutputFile.absolutePath,
-                            inputFile.absolutePath,
-                        )
-                    }
-                }
-
-            logger.info("ProcessBuilder command: $command")
-
-            val processBuilder = ProcessBuilder(command)
-            processBuilder.redirectErrorStream(true)
-            processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD)
-
-            val process = processBuilder.start()
-            val exitCode =
-                if (process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
-                    process.exitValue()
-                } else {
-                    process.destroyForcibly()
-                    throw RuntimeException("cwebp process timeout")
-                }
-
-            logger.info("cwebp process exited with code $exitCode")
-            if (exitCode != 0) {
-                val errorMsg = process.inputStream.bufferedReader().readText()
-                logger.error("cwebp failed: $errorMsg")
-                throw RuntimeException("cwebp failed with exit code $exitCode")
+                CompressionType.LOSSLESS -> listOf(
+                    "cwebp", "-mt", "-lossless", "-q", "100", "-m", "6",
+                    "-o", tempOutputFile.absolutePath, inputFile.absolutePath
+                )
             }
-
-            // The compressed file should now be in the destination directory (same as input)
+            logger.info("Executing command: ${command.joinToString(" ")}")
+            val process = ProcessBuilder(command)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+            if (!process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                throw RuntimeException("cwebp process timeout")
+            }
+            if (process.exitValue() != 0) {
+                val err = process.inputStream.bufferedReader().readText()
+                logger.error("cwebp failed: $err")
+                throw RuntimeException("cwebp failed (code ${process.exitValue()})")
+            }
             val compressedBytes = Files.readAllBytes(tempOutputFile.toPath())
-            logger.info("Compressed file size: ${compressedBytes.size} bytes")
-
+            logger.info("Compressed WebP file size: ${compressedBytes.size} bytes")
             return compressedBytes
         } catch (e: IOException) {
             logger.error("Error during WebP compression", e)
             throw RuntimeException("Error during WebP compression: ${e.message}", e)
         } finally {
-            if (tempOutputFile.exists()) {
-                tempOutputFile.delete()
-                logger.info("Temporary output file deleted")
-            }
+            tempOutputFile.delete()
         }
     }
 }

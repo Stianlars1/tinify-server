@@ -1,3 +1,4 @@
+// PngCompressionService.kt (updated)
 package dev.tinify.service.compressionService.compressors
 
 import dev.tinify.CompressionType
@@ -5,7 +6,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.io.File
-import java.io.IOException
 import java.nio.file.Files
 import java.util.*
 
@@ -14,17 +14,10 @@ class PngCompressionService {
 
     private val logger: Logger = LoggerFactory.getLogger(PngCompressionService::class.java)
 
-    // CompressionType enum is defined in the parent package, CompressionType.LOSSY or
-    // CompressionType.LOSSLESS
     fun compressPng(inputFile: File, compressionType: CompressionType): ByteArray {
-        logger.info("=== compressPng ===")
-        logger.info("Compressing PNG file: ${inputFile.absolutePath}")
         if (!inputFile.exists() || !inputFile.canRead()) {
-            throw RuntimeException(
-                "Input file is not accessible or doesn't exist: ${inputFile.absolutePath}"
-            )
+            throw RuntimeException("Input file is not accessible: ${inputFile.absolutePath}")
         }
-
         return if (compressionType == CompressionType.LOSSY) {
             compressPngLOSSY(inputFile)
         } else {
@@ -34,150 +27,117 @@ class PngCompressionService {
 
     fun compressPngLOSSY(inputFile: File): ByteArray {
         logger.info("Compressing PNG using LOSSY pipeline")
-
         val tempPngquantFile = File.createTempFile("pngquant-${UUID.randomUUID()}", ".png")
         val finalOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
 
         try {
             // Step 1: pngquant lossy compression
-            val pngquantProcess =
-                ProcessBuilder(
-                    "pngquant",
-                    "--quality=80-90",
-                    "--speed=1",
-                    "--strip",
-                    "--skip-if-larger",
-                    "--output",
-                    tempPngquantFile.absolutePath,
-                    "--force",
-                    inputFile.absolutePath,
-                )
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-                    .start()
-            val pngquantExitCode =
-                if (pngquantProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
-                    pngquantProcess.exitValue()
-                } else {
-                    pngquantProcess.destroyForcibly()
-                    throw RuntimeException("pngquant process timeout")
-                }
-            if (pngquantExitCode != 0) {
+            val pngquantProcess = ProcessBuilder(
+                "pngquant", "--quality=80-90", "--speed=1", "--strip", "--skip-if-larger",
+                "--output", tempPngquantFile.absolutePath, "--force", inputFile.absolutePath
+            ).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+            if (!pngquantProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                pngquantProcess.destroyForcibly()
+                throw RuntimeException("pngquant process timeout")
+            }
+            if (pngquantProcess.exitValue() != 0) {
                 val errorMsg = pngquantProcess.errorStream.bufferedReader().readText()
                 logger.error("pngquant failed: $errorMsg")
-                throw RuntimeException("pngquant failed with exit code $pngquantExitCode")
+                throw RuntimeException("pngquant failed (code ${pngquantProcess.exitValue()})")
             }
 
+            // Use pngquant output by default
             val pngquantSize = tempPngquantFile.length()
-            var outputFile = tempPngquantFile
+            var outputFile: File = tempPngquantFile
 
-            // Step 2: Apply oxipng only if it reduces file size
-            val oxipngProcess =
-                ProcessBuilder(
-                    "oxipng",
-                    "--opt",
-                    "max",
-                    "--strip",
-                    "safe",
-                    "--out",
-                    finalOutputFile.absolutePath,
-                    tempPngquantFile.absolutePath,
-                )
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-                    .start()
-            val oxipngExitCode =
-                if (oxipngProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
-                    oxipngProcess.exitValue()
-                } else {
-                    oxipngProcess.destroyForcibly()
-                    throw RuntimeException("oxipng process timeout")
-                }
-
-            if (oxipngExitCode == 0) {
+            // Step 2: oxipng (max optimization, safe strip)
+            val oxipngProcess = ProcessBuilder(
+                "oxipng", "--opt", "max", "--strip", "safe",
+                "--out", finalOutputFile.absolutePath, tempPngquantFile.absolutePath
+            ).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+            if (!oxipngProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                oxipngProcess.destroyForcibly()
+                throw RuntimeException("oxipng process timeout")
+            }
+            if (oxipngProcess.exitValue() == 0) {
                 val oxipngSize = finalOutputFile.length()
                 if (oxipngSize < pngquantSize) {
                     logger.info("oxipng reduced size from $pngquantSize to $oxipngSize bytes")
                     outputFile = finalOutputFile
                     if (tempPngquantFile.exists()) tempPngquantFile.delete()
                 } else {
-                    // oxipng didn't reduce size; use pngquant output
-                    logger.info("oxipng didn't reduce size; using pngquant output")
+                    logger.info("oxipng did not reduce size; using pngquant output")
                     if (finalOutputFile.exists()) finalOutputFile.delete()
                 }
             } else {
-                // oxipng failed; use pngquant output
                 val errorMsg = oxipngProcess.errorStream.bufferedReader().readText()
-
                 logger.error("oxipng failed: $errorMsg")
-
                 if (finalOutputFile.exists()) finalOutputFile.delete()
             }
 
+            // Additional step: advpng for maximum lossless compression
+            if (outputFile.exists()) {
+                logger.info("Running advpng for additional PNG compression")
+                val advpngProcess = ProcessBuilder("advpng", "-z", "-4", outputFile.absolutePath)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+                if (!advpngProcess.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    advpngProcess.destroyForcibly()
+                    logger.warn("advpng process timeout")
+                } else if (advpngProcess.exitValue() != 0) {
+                    logger.warn("advpng did not run successfully (code ${advpngProcess.exitValue()})")
+                }
+            }
+
             return Files.readAllBytes(outputFile.toPath())
-        } catch (e: IOException) {
-            logger.error("Error during PNG compression pipeline", e)
-            throw RuntimeException("Error during PNG compression pipeline: ${e.message}", e)
-        } catch (e: InterruptedException) {
-            logger.error("Process was interrupted during PNG compression", e)
-            Thread.currentThread().interrupt() // Restore the interrupted status
-            throw RuntimeException(
-                "Process was interrupted during PNG compression: ${e.message}",
-                e,
-            )
         } finally {
-            // Clean up any remaining temporary files
-            if (tempPngquantFile.exists()) tempPngquantFile.delete()
-            if (finalOutputFile.exists()) finalOutputFile.delete()
+            tempPngquantFile.delete()
+            finalOutputFile.delete()
         }
     }
 
-    // lossless using PNGCrush
+    // Lossless path: pngcrush then advpng
     fun compressPngLOSSLESS(inputFile: File): ByteArray {
         logger.info("Compressing PNG using PNGCrush (LOSSLESS)")
         val tempOutputFile = File.createTempFile("compressed-${UUID.randomUUID()}", ".png")
-        logger.info("Temporary output file created: ${tempOutputFile.absolutePath}")
-
         try {
-            val processBuilder =
-                ProcessBuilder(
-                    "pngcrush",
-                    "-reduce",
-                    "-q",
-                    inputFile.absolutePath,
-                    tempOutputFile.absolutePath,
-                )
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-            logger.info("ProcessBuilder command: ${processBuilder.command()}")
-
+            val processBuilder = ProcessBuilder(
+                "pngcrush", "-reduce", "-q",
+                inputFile.absolutePath, tempOutputFile.absolutePath
+            ).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
             val process = processBuilder.start()
-            val exitCode =
-                if (process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
-                    process.exitValue()
-                } else {
-                    process.destroyForcibly()
-                    throw RuntimeException("pngcrush process timeout")
-                }
-
-            logger.info("pngcrush process exited with code $exitCode")
-            if (exitCode != 0) {
+            if (!process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                throw RuntimeException("pngcrush process timeout")
+            }
+            if (process.exitValue() != 0) {
                 val errorMsg = process.inputStream.bufferedReader().readText()
                 logger.error("pngcrush failed: $errorMsg")
-                throw RuntimeException("pngcrush failed with exit code $exitCode")
+                throw RuntimeException("pngcrush failed (code ${process.exitValue()})")
             }
-
-            return Files.readAllBytes(tempOutputFile.toPath())
-        } catch (e: IOException) {
-            logger.error("Error during PNG compression", e)
-            throw RuntimeException("Error during PNG compression: ${e.message}", e)
-        } finally {
-            // Make sure you delete the tempOutputFile after reading its bytes
+            // AdvPNG for further compression
             if (tempOutputFile.exists()) {
-                logger.info("Temporary output file exists: ${tempOutputFile.absolutePath}")
-                tempOutputFile.delete() // Safely delete after compression is successful
-                logger.info("Temporary output file deleted")
+                logger.info("Running advpng for lossless PNG compression")
+                val advpngProcess = ProcessBuilder("advpng", "-z", "-4", tempOutputFile.absolutePath)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+                if (!advpngProcess.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    advpngProcess.destroyForcibly()
+                    logger.warn("advpng process timeout")
+                } else if (advpngProcess.exitValue() != 0) {
+                    logger.warn("advpng did not run successfully (code ${advpngProcess.exitValue()})")
+                }
             }
+            return Files.readAllBytes(tempOutputFile.toPath())
+        } finally {
+            tempOutputFile.delete()
         }
     }
 }
