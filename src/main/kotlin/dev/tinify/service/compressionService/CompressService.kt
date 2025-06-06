@@ -21,7 +21,7 @@ data class CompressionResult(
 
 @Service
 class CompressService(
-    private val pngCompressionService: PngCompressionService, // Inject the new service
+    private val pngCompressionService: PngCompressionService,
     private val jpegCompressionService: JpegCompressionService,
     private val webpCompressionService: WebPCompressionService,
     private val gifCompressionService: GifCompressionService,
@@ -36,17 +36,18 @@ class CompressService(
         imageRequestData: ImageRequestData,
         compressionType: CompressionType,
     ): CompressionResult {
-        logger.info("Starting image compression")
+        logger.info("Starting TinyPNG-style compression for ${imageRequestData.originalFormat}")
 
         val compressedBytes = compressBasedOnFormat(imageRequestData, compressionType)
 
         val compressedSize = compressedBytes.size.toLong()
-        val compressionPercentage =
-            if (imageRequestData.originalFileSize > 0) {
-                getCompressionPercent(imageRequestData.originalFileSize, compressedSize)
-            } else {
-                0.0
-            }
+        val compressionPercentage = if (imageRequestData.originalFileSize > 0) {
+            getCompressionPercent(imageRequestData.originalFileSize, compressedSize)
+        } else {
+            0.0
+        }
+
+        logger.info("Compression complete: ${imageRequestData.originalFileSize} B → $compressedSize B (${compressionPercentage.toInt()}% reduction)")
 
         return CompressionResult(
             compressedData = compressedBytes,
@@ -65,105 +66,81 @@ class CompressService(
 
         val rawBytes = imageRequestData.rawBytes
         val imageFile = imageRequestData.imageFile
-        // Handle scenarios where we have raw bytes instead of an ImageIO supported format
-        val tempInputFile =
-            if (rawBytes != null) {
-                // If rawBytes are available (for unsupported formats like SVG), write them to a
-                // temporary file
-                createTempFileWithRawBytes(rawBytes, originalFileName, originalFormat)
-            } else if (imageFile != null) {
-                // Otherwise, use the BufferedImage if it's available
-                createTempFileWithUniqueName(originalFileName, originalFormat).apply {
-                    ImageIO.write(imageFile, originalFormat, this)
-                }
-            } else {
-                throw IllegalArgumentException(
-                    "Both BufferedImage and rawBytes are null for the image"
-                )
-            }
 
-        val compressedBytes =
+        val tempInputFile = if (rawBytes != null) {
+            createTempFileWithRawBytes(rawBytes, originalFileName, originalFormat)
+        } else if (imageFile != null) {
+            createTempFileWithUniqueName(originalFileName, originalFormat).apply {
+                ImageIO.write(imageFile, originalFormat, this)
+            }
+        } else {
+            throw IllegalArgumentException("Both BufferedImage and rawBytes are null for the image")
+        }
+
+        val compressedBytes = try {
+            when (originalFormat.lowercase()) {
+                "png" -> {
+                    logger.info("Using TinyPNG-style PNG compression")
+                    pngCompressionService.compressPng(tempInputFile, compressionType)
+                }
+
+                "pdf" -> {
+                    pdfCompressionService.compressPdf(tempInputFile)
+                }
+
+                "jpeg", "jpg" -> {
+                    logger.info("Using TinyPNG-style JPEG compression")
+                    jpegCompressionService.compressJpegUsingMozjpeg(tempInputFile, compressionType)
+                }
+
+                "webp" -> webpCompressionService.compressWebPUsingCwebp(tempInputFile, compressionType)
+
+                "tiff" -> tiffCompressionService.compressTiffUsingImageMagick(tempInputFile)
+                "gif" -> {
+                    if (rawBytes == null) {
+                        throw IllegalArgumentException("Raw bytes are null for GIF image")
+                    }
+                    gifCompressionService.compressGifUsingGifsicle(rawBytes, compressionType)
+                }
+
+                "svg", "svg+xml" -> {
+                    if (rawBytes == null) {
+                        throw IllegalArgumentException("Raw bytes are null for svg+xml image")
+                    }
+                    return svgOptimizeService.compressSvg(imageRequestData.rawBytes)
+                }
+
+                else -> {
+                    logger.warn("Unsupported format: $originalFormat, using ImageMagick fallback")
+                    imageMagickFallbackService.convertAndCompressUsingImageMagick(
+                        tempInputFile, compressionType, originalFormat
+                    )
+                }
+            }
+        } catch (e: Exception) {
             try {
-                when (originalFormat.lowercase()) {
-                    "png" -> {
-                        pngCompressionService.compressPng(tempInputFile, compressionType)
-                    }
-                    "pdf" -> {
-                        pdfCompressionService.compressPdf(tempInputFile)
-                    }
-
-                    "jpeg",
-                    "jpg" ->
-                        jpegCompressionService.compressJpegUsingMozjpeg(
-                            tempInputFile,
-                            compressionType,
-                        )
-                    "webp" ->
-                        webpCompressionService.compressWebPUsingCwebp(
-                            tempInputFile,
-                            compressionType,
-                        )
-                    "tiff" -> tiffCompressionService.compressTiffUsingImageMagick(tempInputFile)
-                    "gif" -> {
-                        if (rawBytes == null) {
-                            throw IllegalArgumentException("Raw bytes are null for GIF image")
-                        }
-                        gifCompressionService.compressGifUsingGifsicle(rawBytes, compressionType)
-                    }
-
-                    "svg",
-                    "svg+xml" -> {
-                        if (rawBytes == null) {
-                            throw IllegalArgumentException("Raw bytes are null for svg+xml image")
-                        }
-                        return svgOptimizeService.compressSvg(imageRequestData.rawBytes)
-                    }
-
-                    else -> {
-                        logger.warn(
-                            "Unsupported format detected: $originalFormat, using fallback ImageMagick conversion"
-                        )
-                        imageMagickFallbackService.convertAndCompressUsingImageMagick(
-                            tempInputFile,
-                            compressionType,
-                            originalFormat,
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                try {
-                    logger.error(
-                        "Error compressing image, falling back to ImageMagick: ${e.message}",
-                        e,
-                    )
-                    return imageMagickFallbackService.convertAndCompressUsingImageMagick(
-                        tempInputFile,
-                        compressionType,
-                        originalFormat,
-                    )
-                } catch (e: Exception) {
-                    logger.error(
-                        "#2 - Error compressing fallback solution with ImageMagick: ${e.message}",
-                        e,
-                    )
-                    tempInputFile.delete()
-                    throw e
-                }
+                logger.error("Primary compression failed, falling back to ImageMagick: ${e.message}")
+                imageMagickFallbackService.convertAndCompressUsingImageMagick(
+                    tempInputFile, compressionType, originalFormat
+                )
+            } catch (fallbackException: Exception) {
+                logger.error("ImageMagick fallback also failed: ${fallbackException.message}")
+                tempInputFile.delete()
+                throw fallbackException
             }
+        }
 
         tempInputFile.delete()
         return compressedBytes
     }
 }
 
-// Helper method to create a temp file with rawBytes
 private fun createTempFileWithRawBytes(
     rawBytes: ByteArray,
     originalFileName: String,
     originalFormat: String,
 ): File {
-    val tempFile =
-        File.createTempFile("temp-${UUID.randomUUID()}-$originalFileName", ".$originalFormat")
+    val tempFile = File.createTempFile("temp-${UUID.randomUUID()}-$originalFileName", ".$originalFormat")
     Files.write(tempFile.toPath(), rawBytes)
     return tempFile
 }
