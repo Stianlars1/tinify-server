@@ -1,20 +1,10 @@
 package dev.tinify.service.compressionService.compressors.v2
 
-
 import dev.tinify.CompressionType
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.awt.image.BufferedImage
-import java.awt.image.IndexColorModel
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
-import javax.imageio.IIOImage
-import javax.imageio.ImageIO
-import javax.imageio.ImageWriteParam
-//import javax.imageio.plugins.png.PNGImageWriteParam
-
-import javax.imageio.stream.MemoryCacheImageOutputStream
+import java.util.concurrent.TimeUnit
 
 @Service
 class FastPngCompressionService {
@@ -29,11 +19,10 @@ class FastPngCompressionService {
         val startTime = System.currentTimeMillis()
 
         return try {
-            val image = ImageIO.read(ByteArrayInputStream(inputBytes))
-
+            // Use pngquant with optimized settings that match TinyPNG
             val result = when (mode) {
-                CompressionType.LOSSY -> compressLossyInMemory(image, inputBytes.size)
-                CompressionType.LOSSLESS -> compressLosslessInMemory(image)
+                CompressionType.LOSSY -> compressWithPngquant(inputBytes, true)
+                CompressionType.LOSSLESS -> compressWithPngquant(inputBytes, false)
             }
 
             val duration = System.currentTimeMillis() - startTime
@@ -41,125 +30,98 @@ class FastPngCompressionService {
 
             result
         } catch (e: Exception) {
-            log.error("Fast compression failed, using original: ${e.message}")
+            log.error("Fast PNG compression failed, using original: ${e.message}")
             inputBytes
         }
     }
 
-    private fun compressLossyInMemory(image: BufferedImage, originalSize: Int): ByteArray {
-        // Determine optimal color count based on file size
-        val maxColors = when {
-            originalSize > 1_500_000 -> 128  // Large files: aggressive quantization
-            originalSize > 600_000 -> 192   // Medium files: balanced
-            else -> 256                      // Small files: high quality
-        }
+    private fun compressWithPngquant(inputBytes: ByteArray, lossy: Boolean): ByteArray {
+        // Build pngquant command with TinyPNG-equivalent settings
+        val command = buildList {
+            add("pngquant")
+            add("--force") // Overwrite existing files
+            add("--strip") // Remove metadata like TinyPNG does
 
-        // Fast color quantization
-        val quantized = quantizeColors(image, maxColors)
-
-        // Encode with optimized PNG parameters
-        return encodePngOptimized(quantized, compressionLevel = 6)
-    }
-
-    private fun compressLosslessInMemory(image: BufferedImage): ByteArray {
-        return encodePngOptimized(image, compressionLevel = 9)
-    }
-
-    private fun quantizeColors(image: BufferedImage, maxColors: Int): BufferedImage {
-        val width = image.width
-        val height = image.height
-        val pixels = IntArray(width * height)
-        image.getRGB(0, 0, width, height, pixels, 0, width)
-
-        // Fast median cut quantization
-        val palette = medianCutQuantization(pixels, maxColors)
-        val quantizedPixels = applyPalette(pixels, palette)
-
-        // Create indexed color model
-        val r = ByteArray(palette.size)
-        val g = ByteArray(palette.size)
-        val b = ByteArray(palette.size)
-        val a = ByteArray(palette.size)
-
-        palette.forEachIndexed { i, color ->
-            a[i] = ((color shr 24) and 0xFF).toByte()
-            r[i] = ((color shr 16) and 0xFF).toByte()
-            g[i] = ((color shr 8) and 0xFF).toByte()
-            b[i] = (color and 0xFF).toByte()
-        }
-
-        val colorModel = IndexColorModel(8, palette.size, r, g, b, a)
-        val result = BufferedImage(colorModel, colorModel.createCompatibleWritableRaster(width, height), false, null)
-
-        val raster = result.raster
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                raster.setSample(x, y, 0, quantizedPixels[y * width + x])
+            if (lossy) {
+                // TinyPNG-equivalent lossy settings
+                add("--quality")
+                add("65-80") // Sweet spot for TinyPNG-like quality
+                add("--speed")
+                add("1") // Best quality (slower but matches TinyPNG)
+            } else {
+                // Lossless settings - still quantize but with higher quality
+                add("--quality")
+                add("90-100")
+                add("--speed")
+                add("1")
             }
+
+            add("-") // Read from stdin
         }
 
-        return result
-    }
+        log.debug("Executing pngquant command: ${command.joinToString(" ")}")
 
-    private fun medianCutQuantization(pixels: IntArray, maxColors: Int): List<Int> {
-        // Simplified median cut - collect unique colors first
-        val uniqueColors = pixels.toSet().toList()
+        val process = ProcessBuilder(command)
+            .redirectError(ProcessBuilder.Redirect.PIPE)
+            .start()
 
-        return if (uniqueColors.size <= maxColors) {
-            uniqueColors
-        } else {
-            // Sample representative colors using uniform distribution
-            val step = uniqueColors.size / maxColors
-            (0 until maxColors).map { i -> uniqueColors[i * step] }
+        // Write input bytes to stdin
+        process.outputStream.use { outputStream ->
+            outputStream.write(inputBytes)
+            outputStream.flush()
         }
-    }
 
-    private fun applyPalette(pixels: IntArray, palette: List<Int>): IntArray {
-        return pixels.map { pixel ->
-            var bestIndex = 0
-            var bestDistance = Int.MAX_VALUE
+        // Read compressed result from stdout
+        val compressedBytes = process.inputStream.use { inputStream ->
+            inputStream.readAllBytes()
+        }
 
-            palette.forEachIndexed { index, paletteColor ->
-                val distance = colorDistance(pixel, paletteColor)
-                if (distance < bestDistance) {
-                    bestDistance = distance
-                    bestIndex = index
-                }
+        // Wait for process completion with timeout
+        val finished = process.waitFor(30, TimeUnit.SECONDS)
+        if (!finished) {
+            process.destroyForcibly()
+            throw RuntimeException("pngquant process timeout")
+        }
+
+        val exitCode = process.exitValue()
+        if (exitCode != 0) {
+            val errorMsg = process.errorStream.bufferedReader().readText()
+            log.warn("pngquant exited with code $exitCode: $errorMsg")
+
+            // If pngquant fails (e.g., quality too low), apply fallback compression
+            if (exitCode == 99) { // pngquant quality too low
+                return applyFallbackCompression(inputBytes, lossy)
             }
-            bestIndex
-        }.toIntArray()
+            throw RuntimeException("pngquant failed with exit code $exitCode: $errorMsg")
+        }
+
+        return compressedBytes
     }
 
-    private fun colorDistance(color1: Int, color2: Int): Int {
-        val r1 = (color1 shr 16) and 0xFF
-        val g1 = (color1 shr 8) and 0xFF
-        val b1 = color1 and 0xFF
-        val r2 = (color2 shr 16) and 0xFF
-        val g2 = (color2 shr 8) and 0xFF
-        val b2 = color2 and 0xFF
+    private fun applyFallbackCompression(inputBytes: ByteArray, lossy: Boolean): ByteArray {
+        log.info("Applying fallback compression")
 
-        val dr = r1 - r2
-        val dg = g1 - g2
-        val db = b1 - b2
+        // Fallback: Use pngquant with more aggressive settings
+        val command = listOf(
+            "pngquant",
+            "--force",
+            "--strip",
+            if (lossy) "--quality=50-75" else "--quality=80-95",
+            "--speed", "3", // Faster speed for fallback
+            "-"
+        )
 
-        return dr * dr + dg * dg + db * db
-    }
+        val process = ProcessBuilder(command).start()
 
-    private fun encodePngOptimized(image: BufferedImage, compressionLevel: Int): ByteArray {
-        val baos = ByteArrayOutputStream()
-        val ios = MemoryCacheImageOutputStream(baos)
+        process.outputStream.use { it.write(inputBytes) }
+        val result = process.inputStream.readAllBytes()
 
-        val writer = ImageIO.getImageWritersByFormatName("png").next()
-        writer.output = ios
+        if (process.waitFor(20, TimeUnit.SECONDS) && process.exitValue() == 0) {
+            return result
+        }
 
-        val writeParam = writer.defaultWriteParam
-        writeParam.compressionMode = ImageWriteParam.MODE_EXPLICIT
-        writeParam.compressionQuality = (10 - compressionLevel) / 10.0f
-
-        writer.write(null, IIOImage(image, null, null), writeParam)
-        writer.dispose()
-        ios.close()
-
-        return baos.toByteArray()
+        // Final fallback: return original
+        log.warn("Fallback compression also failed, returning original")
+        return inputBytes
     }
 }
