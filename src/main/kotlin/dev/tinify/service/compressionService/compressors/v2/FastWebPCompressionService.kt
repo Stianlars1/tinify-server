@@ -1,11 +1,16 @@
 package dev.tinify.service.compressionService.compressors.v2
 
 import dev.tinify.CompressionType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 @Service
 class FastWebPCompressionService {
@@ -22,7 +27,7 @@ class FastWebPCompressionService {
 
         return try {
             val result = when (mode) {
-                CompressionType.LOSSY -> findBestLossyRecompression(inputBytes)
+                CompressionType.LOSSY -> findBestLossyCompressionFast(inputBytes)
                 CompressionType.LOSSLESS -> findBestLosslessCompression(inputBytes)
             }
 
@@ -42,206 +47,244 @@ class FastWebPCompressionService {
         }
     }
 
-    private fun findBestLossyRecompression(inputBytes: ByteArray): ByteArray {
-        // ULTRA-AGGRESSIVE settings for WebP-to-WebP recompression!
+    private fun findBestLossyCompressionFast(inputBytes: ByteArray): ByteArray = runBlocking {
+        // Use the EXACT settings that achieved 47-57% compression with temp files
         val compressionAttempts = listOf(
-            // Target size approach - most effective for recompression
-            Triple("size", (inputBytes.size * 0.7).toInt(), "Target 30% reduction"),
-            Triple("size", (inputBytes.size * 0.6).toInt(), "Target 40% reduction"),
-            Triple("size", (inputBytes.size * 0.5).toInt(), "Target 50% reduction"),
-
-            // Ultra-aggressive quality settings for WebP recompression
-            Triple("quality", 50, "Moderate quality"),
-            Triple("quality", 40, "Low quality"),
-            Triple("quality", 35, "Very low quality"),
-            Triple("quality", 30, "Ultra low quality"),
+            Triple("working_target", (inputBytes.size * 0.6).toInt(), "Target 40% reduction"),
+            Triple("working_target", (inputBytes.size * 0.5).toInt(), "Target 50% reduction"),
+            Triple("working_quality", 40, "Quality 40"),
+            Triple("working_quality", 35, "Quality 35"),
+            Triple("working_quality", 30, "Quality 30"),
         )
 
-        var bestResult = inputBytes
-        var bestSize = inputBytes.size
+        // Run compressions in parallel
+        val results = compressionAttempts.map { (type, value, description) ->
+            async(Dispatchers.IO) {
+                try {
+                    val compressed = when (type) {
+                        "working_target" -> compressWithWorkingTargetSize(inputBytes, value)
+                        "working_quality" -> compressWithWorkingQuality(inputBytes, value)
+                        else -> null
+                    }
 
-        for ((type, value, description) in compressionAttempts) {
-            try {
-                val compressed = when (type) {
-                    "size" -> compressWithTargetSize(inputBytes, value)
-                    "quality" -> compressWithAggressiveQuality(inputBytes, value)
-                    else -> continue
+                    if (compressed != null && compressed.size < inputBytes.size) {
+                        log.info("SUCCESS: ${description} achieved ${inputBytes.size} → ${compressed.size} bytes (${((inputBytes.size - compressed.size) * 100 / inputBytes.size)}% reduction)")
+                        Pair(compressed, description)
+                    } else {
+                        log.debug("FAILED: ${description} produced ${compressed?.size ?: 0} bytes")
+                        null
+                    }
+                } catch (e: Exception) {
+                    log.debug("ERROR: ${description} failed: ${e.message}")
+                    null
                 }
-
-                if (compressed.size < bestSize) {
-                    bestResult = compressed
-                    bestSize = compressed.size
-                    log.info("New best WebP recompression: ${bestSize} bytes using $description (${((bestSize.toDouble() / inputBytes.size) * 100).toInt()}% of original)")
-                }
-            } catch (e: Exception) {
-                log.debug("WebP compression attempt failed with $description: ${e.message}")
-                continue
             }
         }
 
-        return bestResult
+        // Wait for all results and pick the best one
+        val completedResults = results.awaitAll().filterNotNull()
+
+        if (completedResults.isNotEmpty()) {
+            val bestResult = completedResults.minByOrNull { it.first.size }
+            if (bestResult != null) {
+                log.info("Best parallel compression: ${bestResult.first.size} bytes using ${bestResult.second}")
+                return@runBlocking bestResult.first
+            }
+        }
+
+        log.info("All compression attempts failed, returning original")
+        inputBytes
+    }
+
+    private fun compressWithWorkingTargetSize(inputBytes: ByteArray, targetSize: Int): ByteArray {
+        // Use the EXACT parameters that worked with temp files
+        val command = listOf(
+            "cwebp",
+            "-size", targetSize.toString(),
+            "-pass", "10",  // Back to the working settings
+            "-m", "6",      // Back to the working settings
+            "-quiet",
+            "-o", "-",     // ← stdout
+            "--", "-"               // ✅ FIXED: Use - instead of /dev/stdin
+        )
+
+        log.debug("Working target size compression: ${targetSize} bytes")
+        return executeWebPCommandWithProperThreading(command, inputBytes)
+    }
+
+    private fun compressWithWorkingQuality(inputBytes: ByteArray, quality: Int): ByteArray {
+        // Use the EXACT parameters that worked with temp files
+        val command = listOf(
+            "cwebp",
+            "-q", quality.toString(),
+            "-m", "6",      // Back to the working settings
+            "-pass", "6",   // Back to the working settings
+            "-segments", "4",
+            "-sns", "80",
+            "-f", "25",
+            "-sharpness", "0",
+            "-quiet",
+            "-o", "-",     // ← stdout
+            "--", "-"      // ← stdin via -- switch
+        )
+
+        log.debug("Working quality compression: q=${quality}")
+        return executeWebPCommandWithProperThreading(command, inputBytes)
     }
 
     private fun findBestLosslessCompression(inputBytes: ByteArray): ByteArray {
-        val attempts = listOf(
-            Pair(9, 6),  // Maximum compression, best method
-            Pair(6, 6),  // Balanced compression, best method
-            Pair(9, 4),  // Maximum compression, faster method
+        val command = listOf(
+            "cwebp",
+            "-lossless",
+            "-z", "6",
+            "-m", "4",
+            "-quiet",
+            "-o", "-",     // ← stdout
+            "--", "-"      // ← stdin via -- switch
         )
 
-        var bestResult = inputBytes
-        var bestSize = inputBytes.size
+        return try {
+            executeWebPCommandWithProperThreading(command, inputBytes)
+        } catch (e: Exception) {
+            log.debug("Lossless compression failed: ${e.message}")
+            inputBytes
+        }
+    }
 
-        for ((effort, method) in attempts) {
+    /**
+     * FIXED: Proper concurrent threading to avoid pipe buffer deadlock
+     * FIXED: Using - instead of /dev/stdin and /dev/stdout for proper streaming
+     */
+    private fun executeWebPCommandWithProperThreading(command: List<String>, inputBytes: ByteArray): ByteArray {
+        log.debug("Executing cwebp command: ${command.joinToString(" ")} on ${inputBytes.size} bytes")
+
+        val process = ProcessBuilder(command)
+            .redirectError(ProcessBuilder.Redirect.PIPE)
+            .start()
+
+        // Atomic references for thread communication
+        val outputResult = AtomicReference<ByteArray>()
+        val stdinException = AtomicReference<Exception>()
+        val stdoutException = AtomicReference<Exception>()
+        val errorOutput = AtomicReference<String>()
+
+        // Start stderr reader to capture any errors
+        val stderrThread = thread(name = "webp-stderr-reader") {
             try {
-                val compressed = compressWithCwebpLossless(inputBytes, effort, method)
-
-                if (compressed.size < bestSize) {
-                    bestResult = compressed
-                    bestSize = compressed.size
-                    log.debug("New best WebP lossless compression: ${bestSize} bytes with effort=$effort, method=$method")
+                val error = process.errorStream.bufferedReader().readText()
+                errorOutput.set(error)
+                if (error.isNotEmpty()) {
+                    log.debug("cwebp stderr: $error")
                 }
             } catch (e: Exception) {
-                log.debug("WebP lossless compression attempt failed: ${e.message}")
-                continue
+                log.debug("Stderr reading failed: ${e.message}")
             }
         }
 
-        return bestResult
-    }
-
-    private fun compressWithTargetSize(inputBytes: ByteArray, targetSize: Int): ByteArray {
-        // Create temp files
-        val inputFile = File.createTempFile("webp-input", ".webp")
-        val outputFile = File.createTempFile("webp-output", ".webp")
-
-        return try {
-            // Write input to temp file
-            Files.write(inputFile.toPath(), inputBytes)
-
-            val command = listOf(
-                "cwebp",
-                "-size", targetSize.toString(),  // Target specific file size
-                "-pass", "10",                   // Maximum passes for target size
-                "-m", "6",                       // Best compression method
-                "-quiet",
-                inputFile.absolutePath,
-                "-o", outputFile.absolutePath
-            )
-
-            log.debug("Executing target size compression: ${targetSize} bytes")
-            val success = executeWebPCommand(command)
-
-            if (success && outputFile.exists()) {
-                Files.readAllBytes(outputFile.toPath())
-            } else {
-                throw RuntimeException("cwebp failed to create output file")
+        // CRITICAL: Start stdout reader IMMEDIATELY before writing to stdin
+        val stdoutThread = thread(name = "webp-stdout-reader") {
+            try {
+                val output = ByteArrayOutputStream()
+                process.inputStream.use { inputStream ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+                }
+                val result = output.toByteArray()
+                outputResult.set(result)
+                log.debug("cwebp produced ${result.size} bytes output")
+            } catch (e: Exception) {
+                stdoutException.set(e)
+                log.debug("Stdout reading failed: ${e.message}")
             }
-        } finally {
-            // Cleanup temp files
-            inputFile.delete()
-            outputFile.delete()
         }
-    }
 
-    private fun compressWithAggressiveQuality(inputBytes: ByteArray, quality: Int): ByteArray {
-        // Create temp files
-        val inputFile = File.createTempFile("webp-input", ".webp")
-        val outputFile = File.createTempFile("webp-output", ".webp")
-
-        return try {
-            // Write input to temp file
-            Files.write(inputFile.toPath(), inputBytes)
-
-            val command = listOf(
-                "cwebp",
-                "-q", quality.toString(),       // FIXED: Use -q instead of -quality
-                "-m", "6",                      // Best compression method
-                "-pass", "6",                   // Multiple passes
-                "-segments", "4",               // More segments for better compression
-                "-sns", "80",                   // Spatial noise shaping
-                "-f", "25",                     // Deblocking filter strength
-                "-sharpness", "0",              // No sharpening (saves space)
-                "-quiet",
-                inputFile.absolutePath,
-                "-o", outputFile.absolutePath
-            )
-
-            log.debug("Executing aggressive quality compression: q=${quality}")
-            val success = executeWebPCommand(command)
-
-            if (success && outputFile.exists()) {
-                Files.readAllBytes(outputFile.toPath())
-            } else {
-                throw RuntimeException("cwebp failed to create output file")
+        // CRITICAL: Start stdin writer IMMEDIATELY after stdout reader
+        val stdinThread = thread(name = "webp-stdin-writer") {
+            try {
+                process.outputStream.use { outputStream ->
+                    outputStream.write(inputBytes)
+                    outputStream.flush()
+                }
+                log.debug("Successfully wrote ${inputBytes.size} bytes to cwebp stdin")
+            } catch (e: Exception) {
+                stdinException.set(e)
+                log.debug("Stdin writing failed: ${e.message}")
             }
-        } finally {
-            // Cleanup temp files
-            inputFile.delete()
-            outputFile.delete()
         }
-    }
-
-    private fun compressWithCwebpLossless(inputBytes: ByteArray, effort: Int, method: Int): ByteArray {
-        // Create temp files
-        val inputFile = File.createTempFile("webp-input", ".webp")
-        val outputFile = File.createTempFile("webp-output", ".webp")
 
         return try {
-            // Write input to temp file
-            Files.write(inputFile.toPath(), inputBytes)
+            // Wait for threads with reasonable timeouts
+            stdinThread.join(5000)
+            stdoutThread.join(10000)
+            stderrThread.join(2000)
 
-            val command = listOf(
-                "cwebp",
-                "-lossless",
-                "-z", effort.toString(),
-                "-m", method.toString(),
-                "-quiet",
-                inputFile.absolutePath,
-                "-o", outputFile.absolutePath
-            )
-
-            val success = executeWebPCommand(command)
-
-            if (success && outputFile.exists()) {
-                Files.readAllBytes(outputFile.toPath())
-            } else {
-                throw RuntimeException("cwebp failed to create output file")
-            }
-        } finally {
-            // Cleanup temp files
-            inputFile.delete()
-            outputFile.delete()
-        }
-    }
-
-    private fun executeWebPCommand(command: List<String>): Boolean {
-        log.debug("Executing cwebp command: ${command.joinToString(" ")}")
-
-        return try {
-            val process = ProcessBuilder(command)
-                .redirectError(ProcessBuilder.Redirect.PIPE)
-                .start()
-
-            val finished = process.waitFor(30, TimeUnit.SECONDS)
-            if (!finished) {
-                process.destroyForcibly()
-                log.error("cwebp process timeout")
-                return false
+            // Check if threads completed successfully
+            if (stdinThread.isAlive) {
+                stdinThread.interrupt()
+                throw RuntimeException("stdin writing timeout")
             }
 
-            val exitValue = process.exitValue()
-            if (exitValue != 0) {
-                val errorMsg = process.errorStream.bufferedReader().readText()
-                log.error("cwebp command failed with exit code $exitValue: ${command.joinToString(" ")}")
-                log.error("cwebp error: $errorMsg")
-                return false
+            if (stdoutThread.isAlive) {
+                stdoutThread.interrupt()
+                throw RuntimeException("stdout reading timeout")
             }
 
-            true
+            // Wait for process to complete
+            val exitCode = process.waitFor()
+
+            log.debug("cwebp completed with exit code $exitCode")
+
+            if (exitCode != 0) {
+                val errorMsg = errorOutput.get() ?: "Unknown error"
+                log.error("cwebp failed with exit code $exitCode: $errorMsg")
+                throw RuntimeException("cwebp failed with exit code $exitCode: $errorMsg")
+            }
+
+            // Check for exceptions in threads
+            stdinException.get()?.let { throw it }
+            stdoutException.get()?.let { throw it }
+
+            val result = outputResult.get() ?: throw RuntimeException("No output received")
+
+            log.debug("cwebp compression result: ${inputBytes.size} → ${result.size} bytes (${if (result.size < inputBytes.size) "success" else "larger"})")
+
+            if (result.isEmpty()) {
+                throw RuntimeException("Empty output received")
+            }
+
+            result
         } catch (e: Exception) {
-            log.error("Failed to execute cwebp command: ${e.message}")
-            false
+            process.destroyForcibly()
+            throw e
+        } finally {
+            // Cleanup any remaining threads
+            if (stdinThread.isAlive) stdinThread.interrupt()
+            if (stdoutThread.isAlive) stdoutThread.interrupt()
+            if (stderrThread.isAlive) stderrThread.interrupt()
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

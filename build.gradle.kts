@@ -39,6 +39,7 @@ dependencies {
 
     // For direct PNG quantization
     implementation("ar.com.hjg:pngj:2.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 }
 
 kotlin {
