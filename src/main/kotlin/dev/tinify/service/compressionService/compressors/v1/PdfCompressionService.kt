@@ -1,4 +1,4 @@
-package dev.tinify.service.compressionService.compressors
+package dev.tinify.service.compressionService.compressors.v1
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
-import java.util.UUID
+import java.util.*
 
 @Service
 class PdfCompressionService {
@@ -25,7 +25,7 @@ class PdfCompressionService {
                     "-sDEVICE=pdfwrite",
                     "-dCompatibilityLevel=1.4",
                     "-dPDFSETTINGS=/screen", // Compression level (/screen is low quality, /ebook is
-                                             // medium, /prepress is high quality)
+                    // medium, /prepress is high quality)
                     "-dNOPAUSE",
                     "-dQUIET",
                     "-dBATCH",

@@ -1,4 +1,4 @@
-package dev.tinify.service.compressionService.compressors
+package dev.tinify.service.compressionService.compressors.v1
 
 import dev.tinify.CompressionType
 import org.slf4j.Logger
