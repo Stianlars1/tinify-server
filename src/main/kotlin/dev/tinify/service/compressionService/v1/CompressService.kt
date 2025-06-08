@@ -2,7 +2,7 @@ package dev.tinify.service
 
 import dev.tinify.CompressionType
 import dev.tinify.getCompressionPercent
-import dev.tinify.service.compressionService.compressors.*
+import dev.tinify.service.compressionService.compressors.v1.*
 import dev.tinify.service.compressionService.createTempFileWithUniqueName
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory

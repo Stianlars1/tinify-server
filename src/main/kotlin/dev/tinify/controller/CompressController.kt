@@ -5,9 +5,9 @@ import dev.tinify.CompressionType
 import dev.tinify.Services
 import dev.tinify.responses.ImageResponse
 import dev.tinify.responses.createCustomHeaders
-import dev.tinify.service.CompressService
 import dev.tinify.service.ImageService
 import dev.tinify.service.UsageTrackerService
+import dev.tinify.service.compressionService.v2.CompressServiceV2
 import dev.tinify.storage.FileStorageService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
@@ -20,10 +20,10 @@ import org.springframework.web.multipart.MultipartFile
 @RequestMapping("/api/compress")
 @CrossOrigin("*")
 internal class CompressController(
-    private val compressService: CompressService,
     private val imageService: ImageService,
     private val usageTrackerService: UsageTrackerService,
     private val fileStorageService: FileStorageService,
+    private val compressServiceV2: CompressServiceV2,
 ) {
     private val logger = LoggerFactory.getLogger(CompressController::class.java)
 
@@ -40,7 +40,7 @@ internal class CompressController(
             val imageRequestData = imageService.getImageFromRequest(file)
 
             // Compress the image
-            val compressionResult = compressService.compressImage(imageRequestData, compressionType)
+            val compressionResult = compressServiceV2.compressImage(imageRequestData, compressionType)
 
             // Store the compressed image
             val uniqueFileName =

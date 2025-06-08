@@ -1,4 +1,4 @@
-package dev.tinify.service.compressionService.compressors
+package dev.tinify.service.compressionService.compressors.v1
 
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
