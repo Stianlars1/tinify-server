@@ -52,6 +52,7 @@ class ImageService {
         logger.debug("Original file size: $originalFileSize")
 
         val rawBytes = file.bytes
+        logger.info("ImageService - Processing ${originalFormat} file: ${rawBytes.size} bytes")
 
         return if (originalFormat == "gif" && isAnimatedGif(rawBytes)) {
             logger.debug("Detected animated GIF")
@@ -81,15 +82,16 @@ class ImageService {
                 originalFileSize = originalFileSize,
             )
         } else {
-            // Try to process the image as a static image using ImageIO
+            // CRITICAL FIX: Always preserve rawBytes for compression services
+            // Only create BufferedImage for operations that specifically need it
             try {
                 val imageFile = readImageWithImageIO(rawBytes)
-                logger.debug("Successfully processed as static image with ImageIO")
+                logger.info("Successfully processed as static image with ImageIO - preserving both BufferedImage and rawBytes")
                 ImageRequestData(
                     originalFormat = originalFormat,
                     originalName = originalName,
-                    imageFile = imageFile,
-                    rawBytes = null,
+                    imageFile = imageFile,     // ✅ Keep BufferedImage for operations that need it
+                    rawBytes = rawBytes,       // ✅ PRESERVE original bytes for compression!
                     originalFileSize = originalFileSize,
                 )
             } catch (e: Exception) {
@@ -196,7 +198,7 @@ class ImageService {
 
         // Add your known formats as well as the formats supported by ImageMagick
         return format in listOf("jpeg", "jpg", "png", "gif", "tiff", "webp", "svg+xml") ||
-            supportedformatsImageMagick.contains(format.uppercase())
+                supportedformatsImageMagick.contains(format.uppercase())
     }
 }
 

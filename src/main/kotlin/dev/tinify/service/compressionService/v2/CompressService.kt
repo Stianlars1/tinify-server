@@ -33,16 +33,20 @@ class CompressServiceV2(
         compressionType: CompressionType,
     ): CompressionResult {
         logger.info("Starting optimized compression for ${imageRequestData.originalFormat}")
+        logger.info("ImageRequestData - originalFileSize: ${imageRequestData.originalFileSize}, rawBytes: ${imageRequestData.rawBytes?.size}, imageFile: ${imageRequestData.imageFile != null}")
+
         val startTime = System.currentTimeMillis()
 
         val compressedBytes = try {
             when (imageRequestData.originalFormat.lowercase()) {
                 "png" -> {
-                    // Prioritize raw bytes for memory efficiency
                     if (imageRequestData.rawBytes != null) {
+                        logger.info("Using rawBytes for PNG compression: ${imageRequestData.rawBytes.size} bytes")
                         fastPngCompressionService.compressPngFromBytes(imageRequestData.rawBytes, compressionType)
                     } else {
+                        logger.info("Creating temp file for PNG compression")
                         val tempFile = createTempFile(imageRequestData)
+                        logger.info("Temp file created: ${tempFile.length()} bytes")
                         fastPngCompressionService.compressPng(tempFile, compressionType).also {
                             tempFile.delete()
                         }
@@ -51,9 +55,12 @@ class CompressServiceV2(
 
                 "jpeg", "jpg" -> {
                     if (imageRequestData.rawBytes != null) {
+                        logger.info("Using rawBytes for JPEG compression: ${imageRequestData.rawBytes.size} bytes")
                         fastJpegCompressionService.compressJpegFromBytes(imageRequestData.rawBytes, compressionType)
                     } else {
+                        logger.info("Creating temp file for JPEG compression")
                         val tempFile = createTempFile(imageRequestData)
+                        logger.info("Temp file created: ${tempFile.length()} bytes")
                         fastJpegCompressionService.compressJpegInMemory(tempFile, compressionType).also {
                             tempFile.delete()
                         }
@@ -62,16 +69,19 @@ class CompressServiceV2(
 
                 "webp" -> {
                     if (imageRequestData.rawBytes != null) {
+                        logger.info("Using rawBytes for WebP compression: ${imageRequestData.rawBytes.size} bytes")
                         fastWebPCompressionService.compressWebPFromBytes(imageRequestData.rawBytes, compressionType)
                     } else {
+                        logger.info("Creating temp file for WebP compression")
                         val tempFile = createTempFile(imageRequestData)
+                        logger.info("Temp file created: ${tempFile.length()} bytes")
                         fastWebPCompressionService.compressWebPInMemory(tempFile, compressionType).also {
                             tempFile.delete()
                         }
                     }
                 }
 
-                // Fallback to existing services for complex formats
+                // Other formats remain the same
                 "gif" -> {
                     val rawBytes = imageRequestData.rawBytes
                         ?: throw IllegalArgumentException("Raw bytes required for GIF")
@@ -104,7 +114,6 @@ class CompressServiceV2(
             }
         } catch (e: Exception) {
             logger.error("Compression failed: ${e.message}")
-            // Return original bytes if available, otherwise re-throw
             imageRequestData.rawBytes ?: throw e
         }
 
@@ -112,6 +121,7 @@ class CompressServiceV2(
         val compressionPercentage =
             getCompressionPercent(imageRequestData.originalFileSize, compressedBytes.size.toLong())
 
+        logger.info("Final result - Original: ${imageRequestData.originalFileSize} B, Compressed: ${compressedBytes.size} B, Percentage: ${compressionPercentage.toInt()}%")
         logger.info("Optimized compression complete: ${imageRequestData.originalFileSize} B → ${compressedBytes.size} B (${compressionPercentage.toInt()}% reduction, ${duration}ms)")
 
         return CompressionResult(
@@ -127,10 +137,12 @@ class CompressServiceV2(
 
         when {
             imageRequestData.rawBytes != null -> {
+                logger.debug("Writing rawBytes to temp file: ${imageRequestData.rawBytes.size} bytes")
                 Files.write(tempFile.toPath(), imageRequestData.rawBytes)
             }
 
             imageRequestData.imageFile != null -> {
+                logger.debug("Writing BufferedImage to temp file")
                 javax.imageio.ImageIO.write(
                     imageRequestData.imageFile,
                     imageRequestData.originalFormat,
@@ -144,6 +156,7 @@ class CompressServiceV2(
             }
         }
 
+        logger.debug("Temp file created: ${tempFile.length()} bytes")
         return tempFile
     }
 }
